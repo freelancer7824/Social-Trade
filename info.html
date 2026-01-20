@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Personal Info - SocialTrade</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen p-4">
+
+    <div class="max-w-2xl mx-auto bg-white rounded-3xl shadow-lg overflow-hidden mt-10">
+        <div class="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-center text-white">
+            <h1 class="text-2xl font-bold uppercase tracking-wide">My Profile</h1>
+        </div>
+
+        <div class="p-8">
+            <div class="flex flex-col items-center mb-8">
+                <div class="relative">
+                    <img id="displayImg" src="https://via.placeholder.com/150" alt="Profile" class="w-32 h-32 rounded-full object-cover border-4 border-blue-100 shadow-md">
+                    <label for="imgUpload" class="absolute bottom-0 right-0 bg-blue-600 p-2 rounded-full cursor-pointer text-white hover:bg-blue-700 shadow-lg">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                        </svg>
+                    </label>
+                    <input type="file" id="imgUpload" class="hidden" accept="image/*">
+                </div>
+                <button id="deleteImgBtn" class="mt-3 text-red-500 text-sm font-medium hover:underline">Remove Photo</button>
+            </div>
+
+            <div id="infoDisplay" class="space-y-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label class="text-gray-500 text-sm">Full Name</label>
+                        <p id="showName" class="text-lg font-semibold text-gray-800 border-b pb-1">-</p>
+                    </div>
+                    <div>
+                        <label class="text-gray-500 text-sm">Email</label>
+                        <p id="showEmail" class="text-lg font-semibold text-gray-800 border-b pb-1">-</p>
+                    </div>
+                    <div>
+                        <label class="text-gray-500 text-sm">Phone</label>
+                        <p id="showPhone" class="text-lg font-semibold text-gray-800 border-b pb-1">-</p>
+                    </div>
+                    <div>
+                        <label class="text-gray-500 text-sm">Age</label>
+                        <p id="showAge" class="text-lg font-semibold text-gray-800 border-b pb-1">-</p>
+                    </div>
+                    <div>
+                        <label class="text-gray-500 text-sm">Country</label>
+                        <p id="showCountry" class="text-lg font-semibold text-gray-800 border-b pb-1">-</p>
+                    </div>
+                    <div>
+                        <label class="text-gray-500 text-sm">User Type</label>
+                        <p id="showType" class="text-lg font-semibold text-gray-800 border-b pb-1">-</p>
+                    </div>
+                </div>
+
+                <div class="mt-8 flex gap-4">
+                    <button id="editBtn" class="flex-1 bg-blue-600 text-white py-3 rounded-xl font-bold shadow-md hover:bg-blue-700 transition">Edit Profile</button>
+                    <button onclick="window.location.href='account.html'" class="flex-1 bg-gray-200 text-gray-700 py-3 rounded-xl font-bold hover:bg-gray-300 transition">Back</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Configuration ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyD1mn9MR9hyZ36Ce1lnGyJYmL6AHopScTA",
+            authDomain: "social-media-5e6c8.firebaseapp.com",
+            databaseURL: "https://social-media-5e6c8-default-rtdb.firebaseio.com/",
+            projectId: "social-media-5e6c8",
+            storageBucket: "social-media-5e6c8.firebasestorage.app",
+            messagingSenderId: "897473713729",
+            appId: "1:897473713729:web:7ba552ed4c1be8754418c0"
+        };
+
+        const CLOUDINARY_URL = "https://api.cloudinary.com/v1_1/dhvtgzy5x/image/upload";
+        const CLOUDINARY_UPLOAD_PRESET = "Rosenews";
+
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.database();
+
+        // Check Login & Load Data
+        auth.onAuthStateChanged(user => {
+            if (user) {
+                loadUserData(user.uid);
+            } else {
+                window.location.href = "login.html";
+            }
+        });
+
+        async function loadUserData(uid) {
+            const snapshot = await db.ref('user-info/' + uid).once('value');
+            const data = snapshot.val();
+            
+            if (data) {
+                document.getElementById('showName').innerText = data.profile.fullName;
+                document.getElementById('showEmail').innerText = data.profile.email;
+                document.getElementById('showPhone').innerText = data.profile.phone;
+                document.getElementById('showAge').innerText = data.search_meta.age;
+                document.getElementById('showCountry').innerText = data.search_meta.country;
+                document.getElementById('showType').innerText = data.search_meta.userType;
+                
+                if (data.profile.profilePic) {
+                    document.getElementById('displayImg').src = data.profile.profilePic;
+                }
+            }
+        }
+
+        // --- Image Upload System ---
+        document.getElementById('imgUpload').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            const user = auth.currentUser;
+            if (!file || !user) return;
+
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+
+            try {
+                const res = await fetch(CLOUDINARY_URL, { method: 'POST', body: formData });
+                const cloudData = await res.json();
+                const newUrl = cloudData.secure_url;
+
+                // Update Firebase
+                await db.ref('user-info/' + user.uid + '/profile').update({ profilePic: newUrl });
+                document.getElementById('displayImg').src = newUrl;
+                alert("Profile picture updated!");
+            } catch (err) {
+                alert("Upload failed!");
+            }
+        });
+
+        // --- Delete Profile Image ---
+        document.getElementById('deleteImgBtn').addEventListener('click', async () => {
+            const user = auth.currentUser;
+            if (confirm("Delete profile photo?") && user) {
+                const defaultImg = "https://via.placeholder.com/150";
+                await db.ref('user-info/' + user.uid + '/profile').update({ profilePic: defaultImg });
+                document.getElementById('displayImg').src = defaultImg;
+            }
+        });
+
+        // --- Simple Edit Logic ---
+        document.getElementById('editBtn').addEventListener('click', () => {
+            const newName = prompt("Enter new name:", document.getElementById('showName').innerText);
+            if (newName && auth.currentUser) {
+                db.ref('user-info/' + auth.currentUser.uid + '/profile').update({ fullName: newName })
+                .then(() => {
+                    document.getElementById('showName').innerText = newName;
+                    alert("Name updated!");
+                });
+            }
+        });
+    </script>
+</body>
+</html>

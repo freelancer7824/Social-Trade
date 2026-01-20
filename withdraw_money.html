@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Withdraw Funds - SocialTrade</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+
+    <style>
+        .method-card-active {
+            background-color: #ef4444 !important;
+            border-color: #b91c1c !important;
+            color: white !important;
+        }
+        .method-card-active p { color: white !important; }
+        .history-dropdown {
+            display: none;
+            position: absolute;
+            right: 0;
+            top: 100%;
+            width: 260px;
+            max-height: 350px;
+            overflow-y: auto;
+            background: white;
+            border-radius: 1.5rem;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+            z-index: 50;
+        }
+        .history-dropdown.show { display: block; }
+    </style>
+</head>
+<body class="bg-gray-50 p-4 sm:p-6 min-h-screen">
+
+    <div class="max-w-2xl mx-auto">
+        <div class="mb-6 flex justify-between items-center relative">
+            <div>
+                <h1 class="text-2xl font-black text-gray-800 tracking-tight">Withdrawal</h1>
+                <p class="text-gray-500 text-xs font-bold">Available: $<span id="userBalanceDisplay">0.00</span></p>
+            </div>
+
+            <div class="relative">
+                <button onclick="document.getElementById('withdrawHistory').classList.toggle('show')" class="bg-white border border-gray-200 px-4 py-2 rounded-2xl flex items-center space-x-2 shadow-sm hover:bg-gray-50 transition">
+                    <i class="fas fa-clock-rotate-left text-red-500"></i>
+                    <span class="text-sm font-bold text-gray-700">History</span>
+                </button>
+
+                <div id="withdrawHistory" class="history-dropdown mt-2 p-2 border border-gray-100">
+                    <p class="text-[10px] font-black text-gray-400 uppercase p-3 border-b">Withdrawal History</p>
+                    <div id="historyItems" class="divide-y divide-gray-50">
+                        <p class="text-xs text-gray-400 p-6 text-center">No history yet</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="withdrawMethodsGrid" class="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-8">
+            <div class="col-span-full py-10 text-center animate-pulse text-gray-400 text-xs font-bold">Loading methods...</div>
+        </div>
+
+        <div id="mainWithdrawForm" class="bg-white rounded-[2.5rem] p-6 shadow-sm border border-gray-100 hidden">
+            <div class="mb-6 p-4 bg-red-50 rounded-2xl border border-red-100 relative">
+                <div class="flex justify-between items-center">
+                    <p id="selectedMethodName" class="text-[10px] font-black text-red-600 uppercase tracking-widest"></p>
+                    <span class="bg-red-600 text-white text-[9px] font-black px-2 py-0.5 rounded-md">MIN: $<span id="minLimit">0</span></span>
+                </div>
+                <p id="methodInstruction" class="text-sm font-bold text-gray-700 mt-2"></p>
+                <p class="text-[9px] text-gray-400 font-bold mt-1">Withdrawal fee: <span id="feePercent">0</span>%</p>
+            </div>
+
+            <form id="withdrawForm" class="space-y-4">
+                <div>
+                    <label class="block text-[10px] font-black text-gray-400 uppercase ml-3 mb-1">Receiving Info</label>
+                    <input type="text" id="addressInput" required class="w-full px-5 py-4 rounded-2xl border border-gray-100 outline-none focus:ring-2 focus:ring-red-500 font-bold bg-gray-50 transition-all">
+                </div>
+                
+                <div>
+                    <label class="block text-[10px] font-black text-gray-400 uppercase ml-3 mb-1">Amount to Withdraw ($)</label>
+                    <input type="number" id="withdrawAmount" step="any" required class="w-full px-5 py-4 rounded-2xl border border-gray-100 outline-none focus:ring-2 focus:ring-red-500 font-bold bg-gray-50 transition-all">
+                </div>
+
+                <div class="bg-gray-50 p-4 rounded-2xl border border-dashed border-gray-200">
+                    <div class="flex justify-between text-xs font-bold text-gray-500">
+                        <span>You will receive:</span>
+                        <span class="text-gray-800 text-sm">$<span id="finalReceiveAmount">0.00</span></span>
+                    </div>
+                </div>
+
+                <button type="submit" id="submitBtn" class="w-full py-4 bg-red-600 text-white font-black rounded-[1.5rem] shadow-lg shadow-red-200 hover:bg-red-700 transition transform active:scale-95 uppercase tracking-widest">Submit Request</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyD1mn9MR9hyZ36Ce1lnGyJYmL6AHopScTA",
+            authDomain: "social-media-5e6c8.firebaseapp.com",
+            databaseURL: "https://social-media-5e6c8-default-rtdb.firebaseio.com/",
+            projectId: "social-media-5e6c8",
+            storageBucket: "social-media-5e6c8.firebasestorage.app",
+            messagingSenderId: "897473713729",
+            appId: "1:897473713729:web:7ba552ed4c1be8754418c0"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+        const auth = firebase.auth();
+
+        let currentBalance = 0;
+        let selectedMethod = null;
+        let selectedMethodKey = "";
+
+        // ১. ব্যালেন্স এবং হিস্ট্রি লোড
+        auth.onAuthStateChanged(user => {
+            if(user) {
+                // ব্যালেন্স মনিটর
+                db.ref(`user-info/${user.uid}/balance`).on('value', snap => {
+                    currentBalance = snap.val() || 0;
+                    document.getElementById('userBalanceDisplay').innerText = currentBalance.toFixed(2);
+                });
+
+                // হিস্ট্রি মনিটর
+                db.ref(`user-withdrawals/${user.uid}`).on('value', snap => {
+                    const container = document.getElementById('historyItems');
+                    container.innerHTML = "";
+                    if(!snap.exists()) {
+                        container.innerHTML = `<p class="text-xs text-gray-400 p-6 text-center">No history yet</p>`;
+                        return;
+                    }
+                    snap.forEach(child => {
+                        const d = child.val();
+                        const color = d.status === 'confirmed' ? 'text-green-500' : (d.status === 'rejected' ? 'text-red-500' : 'text-orange-500');
+                        const div = document.createElement('div');
+                        div.className = "p-4 hover:bg-gray-50 flex justify-between items-center";
+                        div.innerHTML = `
+                            <div>
+                                <p class="text-[11px] font-black text-gray-800 uppercase">${d.method}</p>
+                                <p class="text-[9px] text-gray-400 font-bold">${new Date(d.timestamp).toLocaleDateString()}</p>
+                            </div>
+                            <div class="text-right">
+                                <p class="text-xs font-black text-gray-900">$${d.amount}</p>
+                                <p class="text-[9px] font-black uppercase ${color}">${d.status}</p>
+                            </div>
+                        `;
+                        container.prepend(div);
+                    });
+                });
+            }
+        });
+
+        // ২. মেথড লোড করা
+        db.ref('admin-settings/withdraw-methods').on('value', snap => {
+            const methods = snap.val();
+            const grid = document.getElementById('withdrawMethodsGrid');
+            grid.innerHTML = "";
+            let firstKey = null;
+
+            for (let key in methods) {
+                if (methods[key].active) {
+                    if (!firstKey) firstKey = key;
+                    const card = document.createElement('div');
+                    card.id = "method-" + key;
+                    card.className = "p-4 bg-white border border-gray-100 rounded-2xl cursor-pointer text-center shadow-sm hover:shadow-md transition-all";
+                    card.innerHTML = `<p class="text-[11px] font-black text-gray-700 uppercase tracking-tighter">${key}</p>`;
+                    card.onclick = () => selectWithdrawMethod(key, methods[key], card);
+                    grid.appendChild(card);
+                }
+            }
+            if(firstKey) selectWithdrawMethod(firstKey, methods[firstKey], document.getElementById("method-" + firstKey));
+        });
+
+        function selectWithdrawMethod(key, data, element) {
+            selectedMethodKey = key;
+            selectedMethod = data;
+            
+            document.querySelectorAll('[id^="method-"]').forEach(c => c.classList.remove('method-card-active'));
+            element.classList.add('method-card-active');
+
+            document.getElementById('mainWithdrawForm').classList.remove('hidden');
+            document.getElementById('selectedMethodName').innerText = key;
+            document.getElementById('methodInstruction').innerText = data.instruction;
+            document.getElementById('minLimit').innerText = data.min;
+            document.getElementById('feePercent').innerText = data.charge || 0;
+            document.getElementById('addressInput').placeholder = "Your " + key + " details";
+            calculateNet();
+        }
+
+        // ৩. ক্যালকুলেশন
+        document.getElementById('withdrawAmount').oninput = calculateNet;
+
+        function calculateNet() {
+            const amount = parseFloat(document.getElementById('withdrawAmount').value) || 0;
+            const charge = selectedMethod ? (selectedMethod.charge || 0) : 0;
+            const final = amount - (amount * (charge / 100));
+            document.getElementById('finalReceiveAmount').innerText = final > 0 ? final.toFixed(2) : "0.00";
+        }
+
+        // ৪. উইথড্র সাবমিশন
+        document.getElementById('withdrawForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const amount = parseFloat(document.getElementById('withdrawAmount').value);
+            const address = document.getElementById('addressInput').value;
+
+            if (amount < selectedMethod.min) {
+                return Swal.fire("Minimum Limit", "Min withdraw is $" + selectedMethod.min, "error");
+            }
+            if (amount > currentBalance) {
+                return Swal.fire("Insufficient Balance", "You don't have enough funds.", "error");
+            }
+
+            const confirm = await Swal.fire({
+                title: 'Confirm Withdrawal?',
+                text: `Request $${amount} to ${address}`,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444'
+            });
+
+            if (confirm.isConfirmed) {
+                try {
+                    const reqKey = db.ref('withdraw-requests').push().key;
+                    const withdrawData = {
+                        uid: auth.currentUser.uid,
+                        userName: auth.currentUser.displayName || "User",
+                        method: selectedMethodKey,
+                        amount: amount,
+                        address: address,
+                        status: "pending",
+                        timestamp: firebase.database.ServerValue.TIMESTAMP
+                    };
+
+                    // ডাটাবেসে সেভ এবং ব্যালেন্স কাটা
+                    const updates = {};
+                    updates[`/withdraw-requests/${reqKey}`] = withdrawData;
+                    updates[`/user-withdrawals/${auth.currentUser.uid}/${reqKey}`] = withdrawData;
+                    
+                    await db.ref().update(updates);
+                    await db.ref(`user-info/${auth.currentUser.uid}/balance`).transaction(curr => curr - amount);
+
+                    Swal.fire("Request Sent!", "Withdrawal is under review.", "success");
+                    document.getElementById('withdrawForm').reset();
+                    calculateNet();
+                } catch (err) {
+                    Swal.fire("Error", err.message, "error");
+                }
+            }
+        };
+
+        // আউটসাইড ক্লিক ক্লোজ
+        window.onclick = (e) => {
+            if (!e.target.closest('.relative')) document.getElementById('withdrawHistory').classList.remove('show');
+        };
+    </script>
+</body>
+</html>

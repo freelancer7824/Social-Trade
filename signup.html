@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign Up - SocialTrade</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+</head>
+<body class="bg-gray-50 flex items-center justify-center min-h-screen p-4">
+
+    <div class="max-w-md w-full bg-white rounded-3xl shadow-xl p-8 border border-gray-100">
+        <div class="text-center mb-6">
+            <span class="text-3xl font-extrabold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+                SOCIALTRADE
+            </span>
+            <p class="text-gray-500 mt-2 font-medium">Device Secured Signup</p>
+        </div>
+
+        <form id="signupForm" class="space-y-4">
+            <input type="text" id="fullName" placeholder="Full Name" required class="w-full px-4 py-3 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-blue-500">
+            
+            <div class="flex gap-4">
+                <input type="number" id="age" placeholder="Age" required class="w-1/2 px-4 py-3 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-blue-500">
+                <select id="userType" required class="w-1/2 px-4 py-3 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                    <option value="" disabled selected>User type</option>
+                    <option value="Buyer">Buyer</option>
+                    <option value="Seller">Seller</option>
+                    <option value="Both">Both</option>
+                </select>
+            </div>
+
+            <select id="country" required class="w-full px-4 py-3 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                <option value="" disabled selected>Select Country</option>
+                <option value="Bangladesh">Bangladesh</option>
+                <option value="India">India</option>
+                <option value="USA">USA</option>
+            </select>
+
+            <input type="email" id="email" placeholder="Email Address" required class="w-full px-4 py-3 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-blue-500">
+            <input type="tel" id="phoneNumber" placeholder="Phone Number" required class="w-full px-4 py-3 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-blue-500">
+
+            <input type="password" id="password" placeholder="Password" required class="w-full px-4 py-3 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-blue-500">
+            <input type="password" id="confirmPassword" placeholder="Confirm Password" required class="w-full px-4 py-3 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-blue-500">
+
+            <div class="mt-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Profile Image (Optional)</label>
+                <input type="file" id="profileImage" accept="image/*" class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+            </div>
+
+            <button type="submit" id="signupBtn" class="w-full py-4 bg-blue-600 text-white font-bold rounded-2xl shadow-lg hover:bg-blue-700 transition">
+                Sign Up Now
+            </button>
+        </form>
+    </div>
+
+    <script>
+        // --- Configuration ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyD1mn9MR9hyZ36Ce1lnGyJYmL6AHopScTA",
+            authDomain: "social-media-5e6c8.firebaseapp.com",
+            databaseURL: "https://social-media-5e6c8-default-rtdb.firebaseio.com/",
+            projectId: "social-media-5e6c8",
+            storageBucket: "social-media-5e6c8.firebasestorage.app",
+            messagingSenderId: "897473713729",
+            appId: "1:897473713729:web:7ba552ed4c1be8754418c0"
+        };
+
+        // Cloudinary Details (Change these to your own)
+        const CLOUDINARY_URL = "https://api.cloudinary.com/v1_1/dhvtgzy5x/image/upload";
+        const CLOUDINARY_UPLOAD_PRESET = "Rosenews";
+
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.database();
+
+        function generateHardwareID() {
+            const navigator_info = window.navigator;
+            const screen_info = window.screen;
+            let uid = navigator_info.mimeTypes.length;
+            uid += navigator_info.userAgent.replace(/\D+/g, '');
+            uid += navigator_info.plugins.length;
+            uid += screen_info.height || '';
+            uid += screen_info.width || '';
+            uid += screen_info.pixelDepth || '';
+            return "DEV-" + uid;
+        }
+
+        async function uploadToCloudinary(file) {
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+
+            const response = await fetch(CLOUDINARY_URL, {
+                method: 'POST',
+                body: formData
+            });
+            const data = await response.json();
+            return data.secure_url;
+        }
+
+        document.getElementById('signupForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const signupBtn = document.getElementById('signupBtn');
+            const imageFile = document.getElementById('profileImage').files[0];
+            
+            signupBtn.disabled = true;
+            signupBtn.innerText = "Processing...";
+
+            try {
+                const deviceID = generateHardwareID();
+                const email = document.getElementById('email').value.trim();
+                const phone = document.getElementById('phoneNumber').value.trim();
+                const fullName = document.getElementById('fullName').value.trim();
+                const password = document.getElementById('password').value;
+                const confirmPassword = document.getElementById('confirmPassword').value;
+
+                if (password !== confirmPassword) throw new Error("Passwords do not match!");
+
+                // Check Device
+                const deviceSnap = await db.ref('registered-devices').child(deviceID).once('value');
+                if (deviceSnap.exists()) {
+                    throw new Error("Security Alert: Device already registered!");
+                }
+
+                // Check Phone
+                const phoneSnap = await db.ref('used-phones').child(phone).once('value');
+                if (phoneSnap.exists()) throw new Error("Phone number already used!");
+
+                let profileImageUrl = ""; 
+                // Image Upload (If selected)
+                if (imageFile) {
+                    signupBtn.innerText = "Uploading Image...";
+                    profileImageUrl = await uploadToCloudinary(imageFile);
+                }
+
+                // Create User
+                signupBtn.innerText = "Creating Account...";
+                const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+                const user = userCredential.user;
+
+                // Save All Data to Firebase
+                const updates = {};
+                updates['user-info/' + user.uid] = {
+                    search_meta: {
+                        userType: document.getElementById('userType').value,
+                        country: document.getElementById('country').value,
+                        age: parseInt(document.getElementById('age').value),
+                        deviceID: deviceID
+                    },
+                    profile: {
+                        fullName: fullName,
+                        email: email,
+                        phone: phone,
+                        profilePic: profileImageUrl || "default_avatar_url_here",
+                        createdAt: firebase.database.ServerValue.TIMESTAMP
+                    }
+                };
+                updates['registered-devices/' + deviceID] = user.uid;
+                updates['used-phones/' + phone] = user.uid;
+
+                await db.ref().update(updates);
+
+                alert("Success! Account created and device locked.");
+                window.location.href = "account.html";
+
+            } catch (error) {
+                alert(error.message);
+                signupBtn.disabled = false;
+                signupBtn.innerText = "Sign Up Now";
+            }
+        });
+    </script>
+</body>
+</html>

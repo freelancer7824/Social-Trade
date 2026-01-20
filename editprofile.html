@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Profile - SocialTrade</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+</head>
+<body class="bg-gray-50 flex items-center justify-center min-h-screen p-4">
+
+    <div class="max-w-md w-full bg-white rounded-3xl shadow-xl p-8 border border-gray-100">
+        <div class="text-center mb-6">
+            <h2 class="text-2xl font-bold text-gray-800">Edit Profile</h2>
+            <div id="statusMessage" class="mt-2 text-sm text-gray-500">Update your information</div>
+        </div>
+
+        <div class="flex flex-col items-center mb-6">
+            <div class="relative">
+                <img id="currentProfilePic" src="https://via.placeholder.com/150" class="w-24 h-24 rounded-full object-cover border-4 border-blue-500 shadow-md">
+                <label id="imageLabel" for="newProfileImage" class="absolute bottom-0 right-0 bg-blue-600 p-2 rounded-full cursor-pointer hover:bg-blue-700 shadow-lg">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                </label>
+                <input type="file" id="newProfileImage" accept="image/*" class="hidden">
+            </div>
+            <p id="imageHint" class="text-xs text-gray-400 mt-2">Click icon to change photo</p>
+        </div>
+
+        <form id="editProfileForm" class="space-y-4">
+            <div>
+                <label class="text-xs font-semibold text-gray-500 ml-1">Full Name (Letters only)</label>
+                <input type="text" id="editFullName" required 
+                    placeholder="Enter your name"
+                    class="w-full px-4 py-3 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-400">
+                <p id="nameError" class="text-[10px] text-red-500 mt-1 hidden font-medium">Symbols, emojis, and special codes are not allowed.</p>
+            </div>
+
+            <div>
+                <label class="text-xs font-semibold text-gray-500 ml-1">Bio / About</label>
+                <textarea id="editBio" rows="3" 
+                    placeholder="Tell us about yourself..." 
+                    class="w-full px-4 py-3 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-400 resize-none"></textarea>
+            </div>
+            
+            <div class="flex gap-4">
+                <div class="w-1/2">
+                    <label class="text-xs font-semibold text-gray-500 ml-1">Age</label>
+                    <input type="number" id="editAge" required class="w-full px-4 py-3 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-400">
+                </div>
+                <div class="w-1/2">
+                    <label class="text-xs font-semibold text-gray-500 ml-1">User Type</label>
+                    <select id="editUserType" required class="w-full px-4 py-3 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:bg-gray-100 disabled:text-gray-400">
+                        <option value="Buyer">Buyer</option>
+                        <option value="Seller">Seller</option>
+                        <option value="Both">Both</option>
+                    </select>
+                </div>
+            </div>
+
+            <button type="submit" id="updateBtn" class="w-full py-4 bg-indigo-600 text-white font-bold rounded-2xl shadow-lg hover:bg-indigo-700 transition disabled:bg-gray-400 disabled:cursor-not-allowed">
+                Save Changes
+            </button>
+            <button type="button" onclick="window.history.back()" class="w-full py-2 text-gray-500 font-medium hover:underline">
+                Back to Profile
+            </button>
+        </form>
+    </div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyD1mn9MR9hyZ36Ce1lnGyJYmL6AHopScTA",
+            authDomain: "social-media-5e6c8.firebaseapp.com",
+            databaseURL: "https://social-media-5e6c8-default-rtdb.firebaseio.com/",
+            projectId: "social-media-5e6c8",
+            storageBucket: "social-media-5e6c8.firebasestorage.app",
+            messagingSenderId: "897473713729",
+            appId: "1:897473713729:web:7ba552ed4c1be8754418c0"
+        };
+
+        const CLOUDINARY_URL = "https://api.cloudinary.com/v1_1/dhvtgzy5x/image/upload";
+        const CLOUDINARY_UPLOAD_PRESET = "Rosenews";
+
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.database();
+
+        let currentUser = null;
+
+        auth.onAuthStateChanged(async (user) => {
+            if (user) {
+                currentUser = user;
+                const snapshot = await db.ref('user-info/' + user.uid).once('value');
+                const data = snapshot.val();
+
+                if (data) {
+                    // Profile data filling
+                    document.getElementById('editFullName').value = data.profile.fullName || "";
+                    document.getElementById('editBio').value = data.profile.bio || "";
+                    document.getElementById('editAge').value = data.search_meta.age || "";
+                    document.getElementById('editUserType').value = data.search_meta.userType || "Buyer";
+                    if(data.profile.profilePic) {
+                        document.getElementById('currentProfilePic').src = data.profile.profilePic;
+                    }
+
+                    // 30 Days Check
+                    if (data.profile.lastUpdate) {
+                        const lastUpdate = data.profile.lastUpdate;
+                        const now = Date.now();
+                        const thirtyDaysInMs = 30 * 24 * 60 * 60 * 1000;
+                        const timeLeft = (lastUpdate + thirtyDaysInMs) - now;
+
+                        if (timeLeft > 0) {
+                            const daysLeft = Math.ceil(timeLeft / (1000 * 60 * 60 * 24));
+                            disableForm(daysLeft);
+                        }
+                    }
+                }
+            } else {
+                window.location.href = "login.html";
+            }
+        });
+
+        function disableForm(days) {
+            const inputs = ['editFullName', 'editBio', 'editAge', 'editUserType', 'newProfileImage'];
+            inputs.forEach(id => document.getElementById(id).disabled = true);
+            document.getElementById('updateBtn').disabled = true;
+            document.getElementById('imageLabel').style.display = 'none';
+            document.getElementById('imageHint').innerText = "Locked for 30 days";
+            document.getElementById('statusMessage').innerHTML = `<span class="text-red-500 font-bold">Account Locked! Wait ${days} days to change info again.</span>`;
+        }
+
+        // Image Preview
+        document.getElementById('newProfileImage').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => document.getElementById('currentProfilePic').src = e.target.result;
+                reader.readAsDataURL(file);
+            }
+        });
+
+        async function uploadToCloudinary(file) {
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+            const response = await fetch(CLOUDINARY_URL, { method: 'POST', body: formData });
+            const data = await response.json();
+            return data.secure_url;
+        }
+
+        // Form Submit
+        document.getElementById('editProfileForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const updateBtn = document.getElementById('updateBtn');
+            const nameField = document.getElementById('editFullName');
+            const bioField = document.getElementById('editBio');
+            const imageFile = document.getElementById('newProfileImage').files[0];
+            
+            // --- SECURITY VALIDATION FOR NAME ---
+            // Only English Letters (A-Z, a-z) and Space are allowed. 
+            // No Emoji, Symbols, Code tags, or Icons.
+            const nameRegex = /^[a-zA-Z\s]+$/; 
+
+            if (!nameRegex.test(nameField.value)) {
+                document.getElementById('nameError').classList.remove('hidden');
+                nameField.classList.add('border-red-500');
+                return;
+            } else {
+                document.getElementById('nameError').classList.add('hidden');
+                nameField.classList.remove('border-red-500');
+            }
+
+            updateBtn.disabled = true;
+            updateBtn.innerText = "Processing...";
+
+            try {
+                let imageUrl = document.getElementById('currentProfilePic').src;
+
+                if (imageFile) {
+                    updateBtn.innerText = "Uploading Image...";
+                    imageUrl = await uploadToCloudinary(imageFile);
+                }
+
+                const updates = {};
+                updates[`user-info/${currentUser.uid}/profile/fullName`] = nameField.value.trim();
+                updates[`user-info/${currentUser.uid}/profile/bio`] = bioField.value.trim();
+                updates[`user-info/${currentUser.uid}/profile/profilePic`] = imageUrl;
+                updates[`user-info/${currentUser.uid}/profile/lastUpdate`] = Date.now();
+                updates[`user-info/${currentUser.uid}/search_meta/age`] = parseInt(document.getElementById('editAge').value);
+                updates[`user-info/${currentUser.uid}/search_meta/userType`] = document.getElementById('editUserType').value;
+
+                await db.ref().update(updates);
+
+                alert("Success! Profile updated and locked for 30 days.");
+                location.reload();
+
+            } catch (error) {
+                alert("Error: " + error.message);
+                updateBtn.disabled = false;
+                updateBtn.innerText = "Save Changes";
+            }
+        });
+    </script>
+</body>
+</html>

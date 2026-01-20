@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat - SocialTrade</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+</head>
+<body class="bg-gray-100 h-screen flex flex-col">
+
+    <div class="bg-white border-b p-3 flex items-center shadow-sm sticky top-0 z-10">
+        <button onclick="history.back()" class="mr-3 text-gray-600"><i class="fas fa-arrow-left text-xl"></i></button>
+        <img id="header-photo" src="https://ui-avatars.com/api/?name=..." class="w-10 h-10 rounded-full border object-cover">
+        <div class="ml-3">
+            <h1 id="header-name" class="font-bold text-gray-800 leading-tight">Loading...</h1>
+            <p id="active-status" class="text-[11px] font-medium text-gray-400">checking status...</p>
+        </div>
+    </div>
+
+    <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-3 flex flex-col">
+        </div>
+
+    <div class="bg-white p-3 border-t flex items-center gap-2">
+        <input type="text" id="msg-input" placeholder="Type a message..." 
+               class="flex-1 bg-gray-100 rounded-full px-4 py-2 outline-none focus:ring-1 focus:ring-blue-400">
+        <button id="send-btn" class="text-blue-500 text-2xl p-2"><i class="fas fa-paper-plane"></i></button>
+    </div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyD1mn9MR9hyZ36Ce1lnGyJYmL6AHopScTA",
+            authDomain: "social-media-5e6c8.firebaseapp.com",
+            databaseURL: "https://social-media-5e6c8-default-rtdb.firebaseio.com/",
+            projectId: "social-media-5e6c8",
+            storageBucket: "social-media-5e6c8.firebasestorage.app",
+            messagingSenderId: "897473713729",
+            appId: "1:897473713729:web:7ba552ed4c1be8754418c0"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+        const auth = firebase.auth();
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const targetUid = urlParams.get('uid');
+        let myUid = "";
+
+        auth.onAuthStateChanged(user => {
+            if (user) {
+                myUid = user.uid;
+                updateMyPresence(); // Nijer online status update koro
+                loadChatInfo();
+                loadMessages();
+            } else {
+                window.location.href = "login.html";
+            }
+        });
+
+        // Manage Presence Logic
+        function updateMyPresence() {
+            const myStatusRef = db.ref(`status/${myUid}`);
+            const connectedRef = db.ref(".info/connected");
+
+            connectedRef.on("value", (snap) => {
+                if (snap.val() === true) {
+                    // Jakhon connect hobe
+                    myStatusRef.onDisconnect().set({
+                        state: "offline",
+                        last_changed: firebase.database.ServerValue.TIMESTAMP
+                    });
+                    myStatusRef.set({
+                        state: "online",
+                        last_changed: firebase.database.ServerValue.TIMESTAMP
+                    });
+                }
+            });
+        }
+
+        // Time format helper
+        function formatLastActive(timestamp) {
+            const seconds = Math.floor((Date.now() - timestamp) / 1000);
+            if (seconds < 60) return "Just now";
+            const minutes = Math.floor(seconds / 60);
+            if (minutes < 60) return `${minutes}m ago`;
+            const hours = Math.floor(minutes / 60);
+            if (hours < 24) return `${hours}h ago`;
+            return new Date(timestamp).toLocaleDateString();
+        }
+
+        // Load Header Info & Live Status
+        function loadChatInfo() {
+            // User name & photo load (user-info path theke)
+            db.ref(`user-info/${targetUid}/profile`).on('value', snap => {
+                const data = snap.val();
+                if(data) {
+                    document.getElementById('header-name').innerText = data.fullName || "User";
+                    document.getElementById('header-photo').src = data.profilePic || `https://ui-avatars.com/api/?name=${data.fullName}`;
+                }
+            });
+
+            // Live Online/Offline Status listener
+            db.ref(`status/${targetUid}`).on('value', snap => {
+                const status = snap.val();
+                const statusEl = document.getElementById('active-status');
+                if (status && status.state === "online") {
+                    statusEl.innerText = "Active now";
+                    statusEl.className = "text-[11px] font-medium text-green-500";
+                } else if (status && status.last_changed) {
+                    statusEl.innerText = "Active " + formatLastActive(status.last_changed);
+                    statusEl.className = "text-[11px] font-medium text-gray-400";
+                } else {
+                    statusEl.innerText = "Offline";
+                }
+            });
+        }
+
+        function getChatId(id1, id2) {
+            return id1 < id2 ? id1 + "_" + id2 : id2 + "_" + id1;
+        }
+
+        document.getElementById('send-btn').onclick = sendMessage;
+        document.getElementById('msg-input').onkeypress = (e) => { if(e.key === 'Enter') sendMessage(); };
+
+        function sendMessage() {
+            const input = document.getElementById('msg-input');
+            const text = input.value.trim();
+            if(!text) return;
+
+            const chatId = getChatId(myUid, targetUid);
+            db.ref(`chats/${chatId}`).push({
+                sender: myUid,
+                text: text,
+                timestamp: firebase.database.ServerValue.TIMESTAMP
+            });
+
+            input.value = "";
+        }
+
+        function loadMessages() {
+            const chatId = getChatId(myUid, targetUid);
+            const chatBox = document.getElementById('chat-messages');
+
+            db.ref(`chats/${chatId}`).on('value', snapshot => {
+                chatBox.innerHTML = "";
+                snapshot.forEach(child => {
+                    const msg = child.val();
+                    const isMe = msg.sender === myUid;
+                    
+                    const msgDiv = document.createElement('div');
+                    msgDiv.className = `max-w-[80%] p-3 rounded-2xl text-[15px] shadow-sm ${isMe ? 'bg-blue-500 text-white self-end rounded-tr-none' : 'bg-white text-gray-800 self-start rounded-tl-none'}`;
+                    msgDiv.innerText = msg.text;
+                    chatBox.appendChild(msgDiv);
+                });
+                chatBox.scrollTop = chatBox.scrollHeight;
+            });
+        }
+    </script>
+    <script>// ১. Blue Badge SVG Constant (Script-er shuru-te rakho)
+const blueBadge = `<svg class="inline-block w-[16px] h-[16px] ml-1 mb-0.5 text-[#1877F2]" viewBox="0 0 24 24" fill="currentColor"><path d="M9.707 19.121a.997.997 0 01-1.414 0l-5.646-5.647a1.5 1.5 0 010-2.121l.707-.707a1.5 1.5 0 012.121 0L9 14.167l8.528-8.527a1.5 1.5 0 012.122 0l.707.707a1.5 1.5 0 010 2.121l-9.944 9.944a1 1 0 01-.706.709z" /></svg>`;
+
+// ২. Updated loadChatInfo function (Badge logic soho)
+function loadChatInfo() {
+    // User name, photo & verification load
+    db.ref(`user-info/${targetUid}/profile`).on('value', snap => {
+        const data = snap.val();
+        if(data) {
+            // Check if user is verified
+            const verifiedIcon = data.isVerified ? blueBadge : "";
+            
+            // innerHTML bebohar koro jate SVG badge ta show hoy
+            document.getElementById('header-name').innerHTML = (data.fullName || "User") + verifiedIcon;
+            document.getElementById('header-photo').src = data.profilePic || `https://ui-avatars.com/api/?name=${data.fullName}`;
+        }
+    });
+
+    // Live Status listener (Ager motoi thakbe)
+    db.ref(`status/${targetUid}`).on('value', snap => {
+        const status = snap.val();
+        const statusEl = document.getElementById('active-status');
+        if (status && status.state === "online") {
+            statusEl.innerText = "Active now";
+            statusEl.className = "text-[11px] font-medium text-green-500";
+        } else if (status && status.last_changed) {
+            statusEl.innerText = "Active " + formatLastActive(status.last_changed);
+            statusEl.className = "text-[11px] font-medium text-gray-400";
+        } else {
+            statusEl.innerText = "Offline";
+        }
+    });
+}</script>
+</body>
+</html>
