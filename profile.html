@@ -13,28 +13,318 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
 
     <style>
-        body { background-color: #f0f2f5; font-family: 'Segoe UI', system-ui, sans-serif; }
-        .post-card { background: white; border-radius: 8px; margin-bottom: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); border: 1px solid #dddfe2; overflow: hidden; }
-        .colored-content { min-height: 250px; display: flex; align-items: center; justify-content: center; padding: 30px; text-align: center; font-size: 1.5rem; font-weight: 800; color: white; line-height: 1.2; }
-        .text-limit { display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; }
-        .read-more-link { color: #65676b; font-weight: 600; cursor: pointer; font-size: 0.9rem; padding: 0 16px 12px; display: block; }
+        body { background-color: #f0f2f5; font-family: 'Segoe UI', system-ui, sans-serif; overflow-anchor: none; }
+        .post-card { background: white; border-radius: 8px; margin-bottom: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); border: 1px solid #dddfe2; }
+        .colored-content { min-height: 250px; display: flex; align-items: center; justify-content: center; padding: 30px; text-align: center; font-size: 1.5rem; font-weight: 800; color: white; }
         .profile-header { background: white; border-bottom: 1px solid #dddfe2; }
-        .cover-photo { height: 180px; background: linear-gradient(to right, #1877F2, #00C6FF); }
-        .profile-pic { width: 110px; height: 110px; border-radius: 50%; border: 4px solid white; margin-top: -55px; object-fit: cover; background: #eee; }
+        .cover-photo { height: 160px; background: linear-gradient(to right, #1877F2, #00C6FF); }
+        .profile-pic { width: 120px; height: 120px; border-radius: 50%; border: 4px solid white; margin-top: -60px; object-fit: cover; background: #eee; }
         
-        /* SweetAlert Button Styling */
-        .swal-edit-btn {
-            background: #1877F2;
-            color: white;
-            padding: 14px;
-            border-radius: 12px;
-            font-weight: 700;
-            width: 100%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-            transition: all 0.2s;
+        .action-btn { flex: 1; padding: 8px 0; font-size: 14px; font-weight: 600; color: #65676b; display: flex; align-items: center; justify-content: center; gap: 8px; }
+        .active-like { color: #1877F2 !important; }
+        .comment-bubble { background: #f0f2f5; border-radius: 15px; padding: 6px 12px; max-width: 85%; }
+        
+        /* Iframe Modal Overlay */
+        #profileOverlay { display: none; position: fixed; inset: 0; z-index: 1000; background: white; }
+        #profileIframe { width: 100%; height: calc(100% - 50px); border: none; }
+    </style>
+</head>
+<body class="pb-10">
+
+    <div id="profileOverlay">
+        <div class="h-[50px] border-b flex items-center px-4 bg-white shadow-sm">
+            <button onclick="closeProfile()" class="text-[#1877F2] font-bold flex items-center gap-2">
+                <i class="fas fa-arrow-left"></i> Back
+            </button>
+            <span id="overlayTitle" class="ml-4 font-bold text-gray-700">Profile</span>
+        </div>
+        <iframe id="profileIframe" src=""></iframe>
+    </div>
+
+    <div id="profileWrapper" class="max-w-[500px] mx-auto">
+        <div class="profile-header pb-4 shadow-sm">
+            <div class="cover-photo flex items-start p-3">
+                <a href="feed.html" class="text-white bg-black/20 w-8 h-8 flex items-center justify-center rounded-full"><i class="fas fa-arrow-left"></i></a>
+            </div>
+            <div class="px-4 text-center">
+                <img id="userPic" src="" class="profile-pic mx-auto shadow-md">
+                <h2 id="userName" class="text-2xl font-bold mt-2 text-[#050505]">Loading...</h2>
+                <p id="followerDisplay" class="text-[#1877F2] font-bold text-sm mb-1">0 Followers</p>
+                <p id="userBio" class="text-gray-500 text-sm italic px-6">User Bio</p>
+                <div id="profileActions" class="flex gap-2 mt-4 justify-center"></div>
+            </div>
+        </div>
+
+        <div class="p-3">
+            <h3 id="feedTitle" class="font-bold text-lg text-[#050505] mb-3 border-b pb-2">Posts</h3>
+            <div id="myPostsContainer">
+                <div class="text-center py-20 text-gray-400"><i class="fas fa-spinner fa-spin"></i></div>
+            </div>
+        </div>
+    </div>
+
+<script>
+    const firebaseConfig = {
+        apiKey: "AIzaSyD1mn9MR9hyZ36Ce1lnGyJYmL6AHopScTA",
+        authDomain: "social-media-5e6c8.firebaseapp.com",
+        databaseURL: "https://social-media-5e6c8-default-rtdb.firebaseio.com/",
+        projectId: "social-media-5e6c8",
+        storageBucket: "social-media-5e6c8.firebasestorage.app",
+        messagingSenderId: "897473713729",
+        appId: "1:897473713729:web:7ba552ed4c1be8754418c0"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    const auth = firebase.auth();
+
+    const blueBadge = `<svg class="inline-block w-[18px] h-[18px] ml-1 mb-1 text-[#1877F2]" viewBox="0 0 24 24" fill="currentColor"><path d="M9.707 19.121a.997.997 0 01-1.414 0l-5.646-5.647a1.5 1.5 0 010-2.121l.707-.707a1.5 1.5 0 012.121 0L9 14.167l8.528-8.527a1.5 1.5 0 012.122 0l.707.707a1.5 1.5 0 010 2.121l-9.944 9.944a1 1 0 01-.706.709z" /></svg>`;
+
+    const urlParams = new URLSearchParams(window.location.search);
+    let targetUid = urlParams.get('uid');
+    let userCache = {};
+    let openCommentSections = {};
+
+    // Formatting 1K, 1.2K
+    function formatNumber(num) {
+        if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+        if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+        return num;
+    }
+
+    // Iframe Controllers
+    function openProfile(uid, name) {
+        document.getElementById('overlayTitle').innerText = name;
+        document.getElementById('profileIframe').src = `profile.html?uid=${uid}`;
+        document.getElementById('profileOverlay').style.display = 'block';
+        document.body.style.overflow = "hidden";
+    }
+    function closeProfile() {
+        document.getElementById('profileOverlay').style.display = 'none';
+        document.getElementById('profileIframe').src = "";
+        document.body.style.overflow = "auto";
+    }
+
+    auth.onAuthStateChanged(user => {
+        if (user) {
+            if (!targetUid) targetUid = user.uid;
+            loadProfile(targetUid, user.uid);
+            loadFollowerCount(targetUid);
+            loadAllData(targetUid, user.uid);
+        } else { window.location.href = "login.html"; }
+    });
+
+    async function loadProfile(uid, myUid) {
+        db.ref(`user-info/${uid}/profile`).on('value', snap => {
+            const data = snap.val();
+            if(!data) return;
+            document.getElementById('userName').innerHTML = (data.fullName || "User") + (data.isVerified ? blueBadge : "");
+            document.getElementById('userPic').src = data.profilePic || `https://ui-avatars.com/api/?name=${data.fullName}`;
+            document.getElementById('userBio').innerText = data.bio || "No bio available";
+            setupButtons(uid, myUid);
+        });
+    }
+
+    function loadFollowerCount(uid) {
+        db.ref(`user-followers/${uid}`).on('value', snap => {
+            document.getElementById('followerDisplay').innerText = `${formatNumber(snap.numChildren())} Followers`;
+        });
+    }
+
+    function setupButtons(uid, myUid) {
+        const actions = document.getElementById('profileActions');
+        if (uid === myUid) {
+            actions.innerHTML = `<button onclick="editProfile()" class="bg-[#e4e6eb] text-black px-10 py-2 rounded-lg font-bold text-sm">Edit Profile</button>`;
+        } else {
+            db.ref(`user-following/${myUid}/${uid}`).on('value', snap => {
+                const isF = snap.exists();
+                actions.innerHTML = `
+                    <button onclick="toggleFollow('${uid}', ${isF})" class="px-6 py-2 rounded-lg font-bold text-sm ${isF ? 'bg-gray-200 text-black':'bg-[#1877F2] text-white'}">
+                        ${isF ? 'Following' : 'Follow'}
+                    </button>
+                    <button onclick="window.location.href='chat.html?receiverId=${uid}'" class="bg-gray-200 text-black px-6 py-2 rounded-lg font-bold text-sm">Message</button>`;
+            });
+        }
+    }
+
+    async function toggleFollow(target, isF) {
+        const myId = auth.currentUser.uid;
+        if(isF) {
+            await db.ref(`user-following/${myId}/${target}`).remove();
+            await db.ref(`user-followers/${target}/${myId}`).remove();
+        } else {
+            await db.ref(`user-following/${myId}/${target}`).set(true);
+            await db.ref(`user-followers/${target}/${myId}`).set(true);
+        }
+    }
+
+    function loadAllData(uid, myUid) {
+        db.ref('user-info').on('value', uSnap => {
+            uSnap.forEach(u => { userCache[u.key] = u.val().profile; });
+            db.ref('posts').on('value', pSnap => {
+                let posts = [];
+                pSnap.forEach(child => {
+                    if(child.val().uid === uid) posts.push({ id: child.key, ...child.val() });
+                });
+                renderPosts(posts.sort((a,b)=>b.timestamp-a.timestamp), uid === myUid);
+            });
+        });
+    }
+
+    function renderPosts(posts, isMine) {
+        const container = document.getElementById('myPostsContainer');
+        if(posts.length === 0) {
+            container.innerHTML = `<div class="text-center py-10 text-gray-400">No posts yet.</div>`;
+            return;
+        }
+        container.innerHTML = posts.map(post => {
+            const isLiked = post.likedBy && post.likedBy[auth.currentUser.uid];
+            const isBoxOpen = openCommentSections[post.id] ? '' : 'hidden';
+            return `
+            <div class="post-card">
+                <div class="p-3 flex justify-between items-center">
+                    <div class="flex items-center gap-2">
+                        <img src="${post.userPhoto}" class="w-8 h-8 rounded-full border">
+                        <p class="font-bold text-sm">${post.userName}</p>
+                    </div>
+                    ${isMine ? `<button onclick="deletePost('${post.id}')" class="text-gray-400"><i class="fas fa-trash"></i></button>` : ''}
+                </div>
+                <div class="${post.background && post.background !== 'none' ? 'colored-content' : 'px-4 pb-2 text-[15px]'}" style="background: ${post.background || 'transparent'}">
+                    ${post.text}
+                </div>
+                <div class="px-4 py-2 flex justify-between text-gray-500 text-xs border-b mx-3">
+                    <span><i class="fas fa-thumbs-up text-blue-500"></i> ${post.likedBy ? Object.keys(post.likedBy).length : 0}</span>
+                    <span onclick="toggleComments('${post.id}')" class="cursor-pointer">${post.comments ? Object.keys(post.comments).length : 0} comments</span>
+                </div>
+                <div class="flex px-2 py-1">
+                    <button onclick="handleLike('${post.id}')" class="action-btn ${isLiked ? 'active-like' : ''}"><i class="${isLiked ? 'fas' : 'far'} fa-thumbs-up"></i> Like</button>
+                    <button onclick="toggleComments('${post.id}')" class="action-btn"><i class="far fa-comment"></i> Comment</button>
+                </div>
+                <div id="sec-${post.id}" class="${isBoxOpen} border-t bg-gray-50/50 p-2">
+                    <div class="space-y-3 mb-3 max-h-60 overflow-y-auto">${renderComments(post.comments)}</div>
+                    <div class="flex gap-2">
+                        <input type="text" id="in-${post.id}" placeholder="Write a comment..." class="flex-1 bg-white border rounded-full px-4 py-1.5 text-sm outline-none" onkeypress="if(event.key === 'Enter') postComment('${post.id}')">
+                        <button onclick="postComment('${post.id}')" class="text-blue-500 px-2"><i class="fas fa-paper-plane"></i></button>
+                    </div>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    function renderComments(comments) {
+        if(!comments) return '';
+        return Object.values(comments).sort((a,b)=>a.timestamp-b.timestamp).map(c => {
+            const p = userCache[c.uid] || {};
+            return `
+            <div class="flex gap-2">
+                <img src="${c.userPhoto || 'https://ui-avatars.com/api/?name='+c.userName}" class="w-8 h-8 rounded-full cursor-pointer" onclick="openProfile('${c.uid}', '${c.userName}')">
+                <div class="comment-bubble">
+                    <p class="text-[11px] font-bold cursor-pointer" onclick="openProfile('${c.uid}', '${c.userName}')">${c.userName}${p.isVerified ? blueBadge : ""}</p>
+                    <p class="text-[13px] text-gray-800">${c.text}</p>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    async function handleLike(pid) {
+        const ref = db.ref(`posts/${pid}/likedBy/${auth.currentUser.uid}`);
+        const snap = await ref.get();
+        snap.exists() ? await ref.remove() : await ref.set(true);
+    }
+
+    async function postComment(pid) {
+        const input = document.getElementById(`in-${pid}`);
+        const text = input.value.trim();
+        if(!text) return;
+        
+        openCommentSections[pid] = true; // বক্সে খোলা রাখার জন্য স্টেট আপডেট
+        const myP = userCache[auth.currentUser.uid];
+        await db.ref(`posts/${pid}/comments`).push({
+            uid: auth.currentUser.uid, userName: myP.fullName,
+            userPhoto: myP.profilePic, text: text, timestamp: Date.now()
+        });
+        input.value = "";
+    }
+
+    function toggleComments(pid) {
+        const el = document.getElementById(`sec-${pid}`);
+        el.classList.toggle('hidden');
+        openCommentSections[pid] = !el.classList.contains('hidden');
+    }
+
+    function editProfile() {
+        Swal.fire({
+            title: 'Profile Settings',
+            html: `<button onclick="window.location.href='editprofile.html'" class="bg-[#1877F2] text-white w-full py-3 rounded-xl font-bold">Personal Information</button>`,
+            showConfirmButton: false, showCloseButton: true
+        });
+    }
+
+    async function deletePost(pid) {
+        const res = await Swal.fire({ text: 'Delete post?', icon: 'warning', showCancelButton: true });
+        if(res.isConfirmed) await db.ref(`posts/${pid}`).remove();
+    }
+</script>
+<script>
+    // ... আগের সব কনফিগ এবং ভেরিয়েবল ঠিক থাকবে ...
+    
+    // সময় বের করার ফাংশন (টাইমস্ট্যাম্প থেকে)
+    function timeAgo(ts) {
+        const s = Math.floor((new Date() - ts) / 1000);
+        if (s < 60) return "Just now";
+        if (s < 3600) return Math.floor(s / 60) + "m ago";
+        if (s < 86400) return Math.floor(s / 3600) + "h ago";
+        return Math.floor(s / 86400) + "d ago";
+    }
+    
+    // কমেন্ট রেন্ডার করার ফাংশন (আপডেটেড)
+    function renderComments(comments) {
+        if (!comments) return '';
+        
+        // কমেন্টগুলোকে অবজেক্ট থেকে অ্যারেতে নিয়ে টাইমস্ট্যাম্প অনুযায়ী সর্ট করা (নতুনগুলো উপরে)
+        const sortedComments = Object.values(comments).sort((a, b) => b.timestamp - a.timestamp);
+        
+        return sortedComments.map(c => {
+            const p = userCache[c.uid] || {};
+            return `
+            <div class="flex gap-2">
+                <img src="${c.userPhoto || 'https://ui-avatars.com/api/?name='+c.userName}" class="w-8 h-8 rounded-full cursor-pointer" onclick="openProfile('${c.uid}', '${c.userName}')">
+                <div class="comment-bubble">
+                    <div class="flex items-center gap-2">
+                        <p class="text-[11px] font-bold cursor-pointer" onclick="openProfile('${c.uid}', '${c.userName}')">
+                            ${c.userName}${p.isVerified ? blueBadge : ""}
+                        </p>
+                        <span class="text-[10px] text-gray-500">${timeAgo(c.timestamp)}</span>
+                    </div>
+                    <p class="text-[13px] text-gray-800">${c.text}</p>
+                </div>
+            </div>`;
+        }).join('');
+    }
+    
+    // কমেন্ট পোস্ট করার ফাংশন (বক্স খোলা রাখার লজিকসহ)
+    async function postComment(pid) {
+        const input = document.getElementById(`in-${pid}`);
+        const text = input.value.trim();
+        if (!text) return;
+        
+        openCommentSections[pid] = true;
+        const myP = userCache[auth.currentUser.uid];
+        
+        await db.ref(`posts/${pid}/comments`).push({
+            uid: auth.currentUser.uid,
+            userName: myP.fullName,
+            userPhoto: myP.profilePic,
+            text: text,
+            timestamp: Date.now() // বর্তমান সময় সেভ হচ্ছে
+        });
+        
+        input.value = "";
+    }
+    
+    // ... বাকি ফাংশনগুলো আগের মতোই থাকবে ...
+</script>
+</body>
+</html>            transition: all 0.2s;
             border: none;
             cursor: pointer;
         }
