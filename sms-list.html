@@ -80,6 +80,182 @@
     </div>
 
     <script>
+        // --- 1. Firebase Configuration ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyD1mn9MR9hyZ36Ce1lnGyJYmL6AHopScTA",
+            authDomain: "social-media-5e6c8.firebaseapp.com",
+            databaseURL: "https://social-media-5e6c8-default-rtdb.firebaseio.com/",
+            projectId: "social-media-5e6c8"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+        const auth = firebase.auth();
+
+        let myUid = "";
+        let isChatOpen = false;
+
+        // --- 2. Active Status Logic ---
+        function setStatus(uid) {
+            if (!uid) return;
+            const statusRef = db.ref(`status/${uid}`);
+            const connectedRef = db.ref('.info/connected');
+
+            connectedRef.on('value', (snap) => {
+                if (snap.val() === true) {
+                    // যখন ইউজার পেজ থেকে চলে যাবে (Disconnect)
+                    statusRef.onDisconnect().set({ 
+                        state: 'offline', 
+                        last_changed: firebase.database.ServerValue.TIMESTAMP 
+                    });
+
+                    // যখন ইউজার এই পেজ ভিজিট করবে (Online)
+                    statusRef.set({ 
+                        state: 'online', 
+                        last_changed: firebase.database.ServerValue.TIMESTAMP 
+                    });
+                }
+            });
+        }
+
+        // --- 3. Authentication Observer ---
+        auth.onAuthStateChanged(user => {
+            if (user) {
+                myUid = user.uid;
+                setStatus(myUid); // পেজ ভিজিট করলেই অনলাইন দেখাবে
+                loadInbox();
+                listenForMessages();
+            } else { 
+                window.location.href = "login.html"; 
+            }
+        });
+
+        // Handle back button for mobile
+        window.onpopstate = () => { if(isChatOpen) closeChat(false); };
+
+        // --- 4. UI Actions ---
+        function openChat(uid, name, photo) {
+            isChatOpen = true;
+            document.getElementById('inboxContainer').style.display = 'none';
+            document.getElementById('chatTitle').innerText = name;
+            document.getElementById('headerPic').src = photo || 'https://ui-avatars.com/api/?name='+name;
+            document.getElementById('chatIframe').src = `chat.html?receiverId=${uid}`;
+            document.getElementById('chatView').style.display = 'flex';
+            history.pushState({chat:true}, "");
+        }
+
+        function closeChat(push = true) {
+            isChatOpen = false;
+            document.getElementById('chatView').style.display = 'none';
+            document.getElementById('chatIframe').src = "";
+            document.getElementById('inboxContainer').style.display = 'flex';
+            if(push) history.back();
+        }
+
+        // --- 5. Message Notification Logic ---
+        function listenForMessages() {
+            db.ref('chats').on('child_added', snapshot => {
+                const chatId = snapshot.key;
+                if (chatId.includes(myUid)) {
+                    db.ref(`chats/${chatId}`).limitToLast(1).on('child_added', async msgSnap => {
+                        const msg = msgSnap.val();
+                        if (msg.senderId !== myUid) {
+                            if (Date.now() - msg.timestamp < 5000) {
+                                triggerNotif(msg.senderId, msg.text);
+                            }
+                        }
+                    });
+                }
+            });
+        }
+
+        async function triggerNotif(senderId, text) {
+            if (isChatOpen) return;
+            const pSnap = await db.ref(`user-info/${senderId}/profile`).once('value');
+            const p = pSnap.val() || {};
+            const name = p.fullName || "New Message";
+            const photo = p.profilePic || 'https://ui-avatars.com/api/?name='+name;
+
+            const notif = document.getElementById('pushNotification');
+            document.getElementById('notifImg').src = photo;
+            document.getElementById('notifName').innerText = name;
+            document.getElementById('notifMsg').innerText = text;
+
+            notif.classList.add('show');
+            new Audio('https://raw.githubusercontent.com/Luanfv/messenger-notification-sound/master/messenger_notification.mp3').play().catch(()=>{});
+
+            document.getElementById('notifBtn').onclick = () => {
+                openChat(senderId, name, photo);
+                notif.classList.remove('show');
+            };
+            setTimeout(() => { notif.classList.remove('show'); }, 5000);
+        }
+
+        // --- 6. Load and Render Inbox ---
+        async function loadInbox() {
+            db.ref('chats').on('value', async snap => {
+                const chats = snap.val() || {};
+                let listPromises = [];
+
+                for(let key in chats) {
+                    if(key.includes(myUid)) {
+                        const otherUid = key.replace(myUid,"").replace("_","");
+                        const msgs = Object.values(chats[key]);
+                        const last = msgs[msgs.length - 1];
+                        
+                        listPromises.push((async () => {
+                            const [pS, sS] = await Promise.all([
+                                db.ref(`user-info/${otherUid}/profile`).once('value'),
+                                db.ref(`status/${otherUid}`).once('value')
+                            ]);
+                            const p = pS.val() || {};
+                            return { 
+                                uid: otherUid, 
+                                name: p.fullName || "User", 
+                                photo: p.profilePic, 
+                                msg: last.text, 
+                                time: last.timestamp, 
+                                online: sS.val()?.state === 'online' 
+                            };
+                        })());
+                    }
+                }
+                const list = await Promise.all(listPromises);
+                list.sort((a,b) => b.time - a.time);
+                render(list);
+            });
+        }
+
+        function render(data) {
+            const container = document.getElementById('chat-list');
+            if (data.length === 0) {
+                container.innerHTML = `<div class="p-10 text-center text-gray-400">No chats found.</div>`;
+                return;
+            }
+            container.innerHTML = data.map(i => `
+                <div onclick="openChat('${i.uid}', '${i.name}', '${i.photo}')" class="flex items-center gap-4 p-4 border-b active:bg-gray-100 transition">
+                    <div class="relative">
+                        <img src="${i.photo || 'https://ui-avatars.com/api/?name='+i.name}" class="w-14 h-14 rounded-full object-cover">
+                        <span class="${i.online ? 'online-dot' : ''}"></span>
+                    </div>
+                    <div class="flex-1 overflow-hidden">
+                        <div class="flex justify-between items-center">
+                            <h3 class="font-bold text-gray-800">${i.name}</h3>
+                            <span class="text-[10px] text-gray-400">${new Date(i.time).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
+                        </div>
+                        <p class="text-sm text-gray-500 truncate">${i.msg}</p>
+                    </div>
+                </div>
+            `).join('');
+        }
+    </script>
+</body>
+</html>        </div>
+        <div id="chat-list" class="flex-1 overflow-y-auto pb-20">
+            <div class="p-10 text-center text-gray-400">Loading chats...</div>
+        </div>
+    </div>
+
+    <script>
         // Firebase Config
         const firebaseConfig = {
             apiKey: "AIzaSyD1mn9MR9hyZ36Ce1lnGyJYmL6AHopScTA",
