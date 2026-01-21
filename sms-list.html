@@ -13,7 +13,6 @@
     <style>
         body { background-color: #f7f8fa; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; overflow: hidden; margin: 0; }
         
-        /* 🔔 Modern Push Notification Popup */
         #pushNotification { 
             position: fixed; top: -120px; left: 50%; transform: translateX(-50%);
             width: 90%; max-width: 400px; z-index: 9999; 
@@ -31,10 +30,18 @@
             display: flex; align-items: center; gap: 12px;
         }
 
-        /* Iframe & UI */
         #chatView { display: none; position: fixed; inset: 0; z-index: 1000; background: white; flex-direction: column; }
         #chatIframe { flex-grow: 1; width: 100%; border: none; }
-        .online-dot { width: 12px; height: 12px; background-color: #31a24c; border: 2px solid white; border-radius: 50%; position: absolute; bottom: 2px; right: 2px; }
+        
+        /* 🟢 Dynamic Online Dot Styling */
+        .online-dot { 
+            width: 14px; height: 14px; 
+            background-color: #31a24c; 
+            border: 2px solid white; 
+            border-radius: 50%; 
+            position: absolute; bottom: 2px; right: 2px;
+            box-shadow: 0 0 5px rgba(49, 162, 76, 0.5);
+        }
     </style>
 </head>
 <body class="max-w-[500px] mx-auto h-screen shadow-2xl bg-white">
@@ -61,7 +68,7 @@
             <img id="headerPic" src="" class="w-10 h-10 rounded-full border">
             <div class="ml-3">
                 <h2 id="chatTitle" class="font-bold text-gray-800 text-sm">Chat</h2>
-                <p class="text-[11px] text-green-500 font-bold">Active now</p>
+                <p id="chatStatusHeader" class="text-[11px] text-green-500 font-bold">Active now</p>
             </div>
         </div>
         <iframe id="chatIframe" src=""></iframe>
@@ -74,6 +81,178 @@
                 <i class="fas fa-camera"></i>
             </button>
         </div>
+        <div id="chat-list" class="flex-1 overflow-y-auto pb-20">
+            <div class="p-10 text-center text-gray-400">Loading chats...</div>
+        </div>
+    </div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyD1mn9MR9hyZ36Ce1lnGyJYmL6AHopScTA",
+            authDomain: "social-media-5e6c8.firebaseapp.com",
+            databaseURL: "https://social-media-5e6c8-default-rtdb.firebaseio.com/",
+            projectId: "social-media-5e6c8"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+        const auth = firebase.auth();
+
+        let myUid = "";
+        let isChatOpen = false;
+
+        // --- 🟢 DYNAMIC ACTIVE LOGIC START ---
+        function setDynamicStatus(uid) {
+            const statusRef = db.ref(`status/${uid}`);
+            const connectedRef = db.ref('.info/connected');
+
+            connectedRef.on('value', (snap) => {
+                if (snap.val() === true) {
+                    // ১. ইউজার পেজ থেকে বের হয়ে গেলে অটোমেটিক 'offline' হবে
+                    statusRef.onDisconnect().set({
+                        state: 'offline',
+                        last_seen: firebase.database.ServerValue.TIMESTAMP
+                    });
+
+                    // ২. ইউজার পেজে ভিজিট করা মাত্রই 'online' হবে
+                    statusRef.set({
+                        state: 'online',
+                        last_seen: firebase.database.ServerValue.TIMESTAMP
+                    });
+                }
+            });
+        }
+        // --- 🟢 DYNAMIC ACTIVE LOGIC END ---
+
+        auth.onAuthStateChanged(user => {
+            if (user) {
+                myUid = user.uid;
+                setDynamicStatus(myUid); // ইউজার পেজে ঢোকা মাত্র স্ট্যাটাস একটিভ হবে
+                loadInbox();
+                listenForMessages();
+            } else { 
+                window.location.href = "login.html"; 
+            }
+        });
+
+        window.onpopstate = () => { if(isChatOpen) closeChat(false); };
+
+        function openChat(uid, name, photo) {
+            isChatOpen = true;
+            document.getElementById('inboxContainer').style.display = 'none';
+            document.getElementById('chatTitle').innerText = name;
+            document.getElementById('headerPic').src = photo || 'https://ui-avatars.com/api/?name='+name;
+            document.getElementById('chatIframe').src = `chat.html?receiverId=${uid}`;
+            document.getElementById('chatView').style.display = 'flex';
+            history.pushState({chat:true}, "");
+        }
+
+        function closeChat(push = true) {
+            isChatOpen = false;
+            document.getElementById('chatView').style.display = 'none';
+            document.getElementById('chatIframe').src = "";
+            document.getElementById('inboxContainer').style.display = 'flex';
+            if(push) history.back();
+        }
+
+        function listenForMessages() {
+            db.ref('chats').on('child_added', snapshot => {
+                const chatId = snapshot.key;
+                if (chatId.includes(myUid)) {
+                    db.ref(`chats/${chatId}`).limitToLast(1).on('child_added', async msgSnap => {
+                        const msg = msgSnap.val();
+                        if (msg.senderId !== myUid) {
+                            if (Date.now() - msg.timestamp < 5000) {
+                                triggerNotif(msg.senderId, msg.text);
+                            }
+                        }
+                    });
+                }
+            });
+        }
+
+        async function triggerNotif(senderId, text) {
+            if (isChatOpen) return;
+            const pSnap = await db.ref(`user-info/${senderId}/profile`).once('value');
+            const p = pSnap.val() || {};
+            const name = p.fullName || "New Message";
+            const photo = p.profilePic || 'https://ui-avatars.com/api/?name='+name;
+
+            const notif = document.getElementById('pushNotification');
+            document.getElementById('notifImg').src = photo;
+            document.getElementById('notifName').innerText = name;
+            document.getElementById('notifMsg').innerText = text;
+
+            notif.classList.add('show');
+            new Audio('https://raw.githubusercontent.com/Luanfv/messenger-notification-sound/master/messenger_notification.mp3').play().catch(()=>{});
+
+            document.getElementById('notifBtn').onclick = () => {
+                openChat(senderId, name, photo);
+                notif.classList.remove('show');
+            };
+            setTimeout(() => { notif.classList.remove('show'); }, 5000);
+        }
+
+        async function loadInbox() {
+            // ইউজারের স্ট্যাটাস পরিবর্তন রিয়েল-টাইমে শো করার জন্য .on('value') ব্যবহার করা হয়েছে
+            db.ref('chats').on('value', async snap => {
+                const chats = snap.val() || {};
+                let userList = [];
+
+                for(let key in chats) {
+                    if(key.includes(myUid)) {
+                        const otherUid = key.replace(myUid,"").replace("_","");
+                        const msgs = Object.values(chats[key]);
+                        const last = msgs[msgs.length - 1];
+                        
+                        userList.push((async () => {
+                            const [pS, sS] = await Promise.all([
+                                db.ref(`user-info/${otherUid}/profile`).once('value'),
+                                db.ref(`status/${otherUid}`).once('value')
+                            ]);
+                            const p = pS.val() || {};
+                            const s = sS.val() || {};
+                            return { 
+                                uid: otherUid, 
+                                name: p.fullName || "User", 
+                                photo: p.profilePic, 
+                                msg: last.text, 
+                                time: last.timestamp, 
+                                online: s.state === 'online' 
+                            };
+                        })());
+                    }
+                }
+                const data = await Promise.all(userList);
+                data.sort((a,b) => b.time - a.time);
+                render(data);
+            });
+        }
+
+        function render(data) {
+            const container = document.getElementById('chat-list');
+            if(data.length === 0) {
+                container.innerHTML = `<div class="p-10 text-center text-gray-400">No messages found.</div>`;
+                return;
+            }
+            container.innerHTML = data.map(i => `
+                <div onclick="openChat('${i.uid}', '${i.name}', '${i.photo}')" class="flex items-center gap-4 p-4 border-b active:bg-gray-100 transition">
+                    <div class="relative">
+                        <img src="${i.photo || 'https://ui-avatars.com/api/?name='+i.name}" class="w-14 h-14 rounded-full object-cover">
+                        ${i.online ? '<span class="online-dot"></span>' : ''}
+                    </div>
+                    <div class="flex-1 overflow-hidden">
+                        <div class="flex justify-between items-center">
+                            <h3 class="font-bold text-gray-800">${i.name}</h3>
+                            <span class="text-[10px] text-gray-400">${new Date(i.time).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
+                        </div>
+                        <p class="text-sm text-gray-500 truncate">${i.msg}</p>
+                    </div>
+                </div>
+            `).join('');
+        }
+    </script>
+</body>
+</html>        </div>
         <div id="chat-list" class="flex-1 overflow-y-auto pb-20">
             <div class="p-10 text-center text-gray-400">Loading chats...</div>
         </div>
