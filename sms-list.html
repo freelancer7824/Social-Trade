@@ -6,74 +6,228 @@
     <title>Inbox - SocialTrade</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
 
     <style>
-        body { background-color: white; font-family: 'Segoe UI', sans-serif; overflow: hidden; margin: 0; }
-        .online-dot { width: 14px; height: 14px; background-color: #31a24c; border: 2px solid white; border-radius: 50%; position: absolute; bottom: 2px; right: 2px; }
-        .offline-dot { width: 14px; height: 14px; background-color: #bec3c9; border: 2px solid white; border-radius: 50%; position: absolute; bottom: 2px; right: 2px; }
+        body { background-color: #f7f8fa; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; overflow: hidden; margin: 0; }
         
-        /* Full Screen Chat Iframe Overlay */
+        /* 🔔 Modern Push Notification Popup */
+        #pushNotification { 
+            position: fixed; top: -120px; left: 50%; transform: translateX(-50%);
+            width: 90%; max-width: 400px; z-index: 9999; 
+            transition: all 0.5s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+        }
+        #pushNotification.show { top: 20px; }
+
+        .notif-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 12px 15px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            border: 1px solid rgba(0,0,0,0.05);
+            display: flex; align-items: center; gap: 12px;
+        }
+
+        /* Iframe & UI */
         #chatView { display: none; position: fixed; inset: 0; z-index: 1000; background: white; flex-direction: column; }
         #chatIframe { flex-grow: 1; width: 100%; border: none; }
-
-        /* Notification Popup Style */
-        #pushNotification { 
-            position: fixed; top: -100px; left: 0; right: 0; z-index: 2000; 
-            padding: 0 16px; transition: all 0.5s cubic-bezier(0.18, 0.89, 0.32, 1.28); 
-        }
+        .online-dot { width: 12px; height: 12px; background-color: #31a24c; border: 2px solid white; border-radius: 50%; position: absolute; bottom: 2px; right: 2px; }
     </style>
 </head>
-<body class="max-w-[500px] mx-auto h-screen">
+<body class="max-w-[500px] mx-auto h-screen shadow-2xl bg-white">
 
     <div id="pushNotification">
-        <div id="notifClick" class="max-w-[400px] mx-auto bg-white shadow-xl rounded-2xl p-3 border flex items-center gap-3 cursor-pointer active:scale-95 transition-transform">
-            <img id="notifSenderPhoto" src="" class="w-12 h-12 rounded-full border object-cover">
+        <div id="notifBtn" class="notif-card cursor-pointer active:scale-95 transition-transform">
+            <div class="relative">
+                <img id="notifImg" src="" class="w-12 h-12 rounded-full object-cover border-2 border-blue-500">
+                <div class="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full border-2 border-white animate-pulse"></div>
+            </div>
             <div class="flex-1 overflow-hidden">
                 <div class="flex justify-between items-center">
-                    <h4 id="notifSenderName" class="font-bold text-sm text-gray-800 truncate pr-2">Name</h4>
-                    <span class="text-[9px] bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full font-bold">NEW</span>
+                    <span id="notifName" class="font-bold text-gray-800 truncate">User Name</span>
+                    <span class="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Just now</span>
                 </div>
-                <p id="notifText" class="text-xs text-gray-500 truncate mt-0.5">Message body...</p>
+                <p id="notifMsg" class="text-sm text-gray-600 truncate mt-0.5">Sent a message...</p>
             </div>
         </div>
     </div>
 
     <div id="chatView">
-        <div class="h-[60px] border-b flex items-center px-4 bg-white shadow-sm">
-            <button onclick="closeChat()" class="text-[#1877F2] text-xl p-2">
-                <i class="fas fa-arrow-left"></i>
-            </button>
-            <div class="flex items-center gap-3 ml-2">
-                <img id="headerPic" src="" class="w-10 h-10 rounded-full border object-cover">
-                <div>
-                    <h2 id="chatTitle" class="font-bold text-gray-800 leading-tight">Chat</h2>
-                    <span id="chatStatusText" class="text-[11px] text-green-600 font-medium">Active now</span>
-                </div>
+        <div class="h-[60px] border-b flex items-center px-4 bg-white">
+            <button onclick="closeChat()" class="text-blue-600 text-xl mr-3"><i class="fas fa-arrow-left"></i></button>
+            <img id="headerPic" src="" class="w-10 h-10 rounded-full border">
+            <div class="ml-3">
+                <h2 id="chatTitle" class="font-bold text-gray-800 text-sm">Chat</h2>
+                <p class="text-[11px] text-green-500 font-bold">Active now</p>
             </div>
         </div>
         <iframe id="chatIframe" src=""></iframe>
     </div>
 
     <div id="inboxContainer" class="flex flex-col h-full">
-        <div class="p-4 flex items-center justify-between border-b bg-white sticky top-0">
-            <h1 class="text-2xl font-bold">Chats</h1>
-            <div class="flex gap-4">
-                <i class="fas fa-edit text-xl text-gray-700"></i>
-            </div>
+        <div class="p-5 flex justify-between items-center border-b bg-white">
+            <h1 class="text-2xl font-black text-gray-800">Chats</h1>
+            <button class="bg-gray-100 w-10 h-10 rounded-full flex items-center justify-center text-gray-600">
+                <i class="fas fa-camera"></i>
+            </button>
         </div>
-
-        <div id="chat-list" class="flex-1 overflow-y-auto">
-            <div class="p-10 text-center text-gray-400">Loading your conversations...</div>
+        <div id="chat-list" class="flex-1 overflow-y-auto pb-20">
+            <div class="p-10 text-center text-gray-400">Loading chats...</div>
         </div>
     </div>
 
     <script>
+        // Firebase Config
         const firebaseConfig = {
             apiKey: "AIzaSyD1mn9MR9hyZ36Ce1lnGyJYmL6AHopScTA",
+            authDomain: "social-media-5e6c8.firebaseapp.com",
+            databaseURL: "https://social-media-5e6c8-default-rtdb.firebaseio.com/",
+            projectId: "social-media-5e6c8"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+        const auth = firebase.auth();
+
+        let myUid = "";
+        let isChatOpen = false;
+        let isFirstLoad = true; // প্রথমবার সব মেসেজ লোড হওয়া পর্যন্ত নোটিফিকেশন বন্ধ রাখবে
+
+        // ইউজারের স্ট্যাটাস একটিভ করা
+        function setStatus(uid) {
+            const statusRef = db.ref(`status/${uid}`);
+            db.ref('.info/connected').on('value', snap => {
+                if(snap.val()) {
+                    statusRef.onDisconnect().set({ state: 'offline' });
+                    statusRef.set({ state: 'online' });
+                }
+            });
+        }
+
+        auth.onAuthStateChanged(user => {
+            if (user) {
+                myUid = user.uid;
+                setStatus(myUid);
+                loadInbox();
+                listenForMessages();
+            } else { window.location.href = "login.html"; }
+        });
+
+        // ফোনের ব্যাক বাটন হ্যান্ডেল করা
+        window.onpopstate = () => { if(isChatOpen) closeChat(false); };
+
+        function openChat(uid, name, photo) {
+            isChatOpen = true;
+            document.getElementById('inboxContainer').style.display = 'none';
+            document.getElementById('chatTitle').innerText = name;
+            document.getElementById('headerPic').src = photo || 'https://ui-avatars.com/api/?name='+name;
+            document.getElementById('chatIframe').src = `chat.html?receiverId=${uid}`;
+            document.getElementById('chatView').style.display = 'flex';
+            history.pushState({chat:true}, "");
+        }
+
+        function closeChat(push = true) {
+            isChatOpen = false;
+            document.getElementById('chatView').style.display = 'none';
+            document.getElementById('chatIframe').src = "";
+            document.getElementById('inboxContainer').style.display = 'flex';
+            if(push) history.back();
+        }
+
+        // 🔔 রিয়েল-টাইম মেসেজ লিসেনার (নোটিফিকেশনের জন্য)
+        function listenForMessages() {
+            // সকল চ্যাট নোড লিসেন করা
+            db.ref('chats').on('child_added', snapshot => {
+                const chatId = snapshot.key;
+                if (chatId.includes(myUid)) {
+                    // শুধুমাত্র নতুন আসা ১টি মেসেজ লিসেন করা
+                    db.ref(`chats/${chatId}`).limitToLast(1).on('child_added', async msgSnap => {
+                        const msg = msgSnap.val();
+                        
+                        // যদি মেসেজটি আমার না হয় এবং পেজ লোড হওয়ার পরের মেসেজ হয়
+                        if (msg.senderId !== myUid) {
+                            // শুধুমাত্র কয়েক সেকেন্ড আগের মেসেজের জন্য নোটিফিকেশন দিবে
+                            if (Date.now() - msg.timestamp < 5000) {
+                                triggerNotif(msg.senderId, msg.text);
+                            }
+                        }
+                    });
+                }
+            });
+        }
+
+        async function triggerNotif(senderId, text) {
+            if (isChatOpen) return; // চ্যাট ওপেন থাকলে নোটিফিকেশন আসবে না
+
+            const pSnap = await db.ref(`user-info/${senderId}/profile`).once('value');
+            const p = pSnap.val() || {};
+            const name = p.fullName || "New Message";
+            const photo = p.profilePic || 'https://ui-avatars.com/api/?name='+name;
+
+            const notif = document.getElementById('pushNotification');
+            document.getElementById('notifImg').src = photo;
+            document.getElementById('notifName').innerText = name;
+            document.getElementById('notifMsg').innerText = text;
+
+            // পপআপ শো করা
+            notif.classList.add('show');
+            new Audio('https://raw.githubusercontent.com/Luanfv/messenger-notification-sound/master/messenger_notification.mp3').play().catch(()=>{});
+
+            document.getElementById('notifBtn').onclick = () => {
+                openChat(senderId, name, photo);
+                notif.classList.remove('show');
+            };
+
+            setTimeout(() => { notif.classList.remove('show'); }, 5000);
+        }
+
+        async function loadInbox() {
+            db.ref('chats').on('value', async snap => {
+                const chats = snap.val() || {};
+                let list = [];
+                for(let key in chats) {
+                    if(key.includes(myUid)) {
+                        const otherUid = key.replace(myUid,"").replace("_","");
+                        const msgs = Object.values(chats[key]);
+                        const last = msgs[msgs.length - 1];
+                        
+                        const [pS, sS] = await Promise.all([
+                            db.ref(`user-info/${otherUid}/profile`).once('value'),
+                            db.ref(`status/${otherUid}`).once('value')
+                        ]);
+
+                        const p = pS.val() || {};
+                        list.push({ uid: otherUid, name: p.fullName, photo: p.profilePic, msg: last.text, time: last.timestamp, online: sS.val()?.state === 'online' });
+                    }
+                }
+                list.sort((a,b) => b.time - a.time);
+                render(list);
+            });
+        }
+
+        function render(data) {
+            const container = document.getElementById('chat-list');
+            container.innerHTML = data.map(i => `
+                <div onclick="openChat('${i.uid}', '${i.name}', '${i.photo}')" class="flex items-center gap-4 p-4 border-b active:bg-gray-100 transition">
+                    <div class="relative">
+                        <img src="${i.photo || 'https://ui-avatars.com/api/?name='+i.name}" class="w-14 h-14 rounded-full object-cover">
+                        <span class="${i.online ? 'online-dot' : ''}"></span>
+                    </div>
+                    <div class="flex-1 overflow-hidden">
+                        <div class="flex justify-between items-center">
+                            <h3 class="font-bold text-gray-800">${i.name}</h3>
+                            <span class="text-[10px] text-gray-400">${new Date(i.time).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
+                        </div>
+                        <p class="text-sm text-gray-500 truncate">${i.msg}</p>
+                    </div>
+                </div>
+            `).join('');
+        }
+    </script>
+</body>
+</html>            apiKey: "AIzaSyD1mn9MR9hyZ36Ce1lnGyJYmL6AHopScTA",
             authDomain: "social-media-5e6c8.firebaseapp.com",
             databaseURL: "https://social-media-5e6c8-default-rtdb.firebaseio.com/",
             projectId: "social-media-5e6c8"
