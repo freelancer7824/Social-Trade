@@ -24,19 +24,64 @@
         .active-like { color: #1877F2 !important; }
         .comment-bubble { background: #f0f2f5; border-radius: 15px; padding: 6px 12px; max-width: 85%; }
         
+        /* 🔔 Stylish Push Notification */
+        #pushNotification { 
+            position: fixed; top: -250px; left: 50%; transform: translateX(-50%);
+            width: 95%; max-width: 450px; z-index: 99999; 
+            transition: all 0.6s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+        }
+        #pushNotification.show { top: 20px; }
+        .notif-card { 
+            background: white; border-radius: 25px; padding: 15px; 
+            box-shadow: 0 20px 60px rgba(0,0,0,0.2); border: 1px solid rgba(0,0,0,0.05); 
+        }
+        .notif-badge {
+            position: absolute; top: -5px; right: -5px;
+            background: #ff3b30; color: white; font-size: 10px;
+            font-weight: bold; padding: 2px 6px; border-radius: 10px; border: 2px solid white;
+        }
+        .notif-reply-box { display: none; margin-top: 15px; border-top: 1px solid #f0f0f0; padding-top: 12px; }
+        .notif-reply-box.active { display: flex; gap: 10px; align-items: center; }
+
         /* Iframe Modal Overlay */
-        #profileOverlay { display: none; position: fixed; inset: 0; z-index: 1000; background: white; }
+        #profileOverlay { display: none; position: fixed; inset: 0; z-index: 5000; background: white; }
         #profileIframe { width: 100%; height: calc(100% - 50px); border: none; }
     </style>
 </head>
 <body class="pb-10">
+
+    <div id="pushNotification">
+        <div class="notif-card">
+            <div class="flex items-center gap-4 cursor-pointer" onclick="openChatFromNotif()">
+                <div class="relative">
+                    <img id="notifImg" src="" class="w-14 h-14 rounded-full object-cover border-2 border-blue-500">
+                    <span class="notif-badge">New</span>
+                </div>
+                <div class="flex-1 overflow-hidden">
+                    <div class="flex justify-between items-center">
+                        <span id="notifName" class="font-black text-gray-800">User Name</span>
+                        <span class="text-[10px] text-blue-600 font-bold uppercase">Chat</span>
+                    </div>
+                    <p id="notifMsg" class="text-sm text-gray-500 truncate mt-0.5">Message preview...</p>
+                </div>
+            </div>
+            <div class="flex mt-3 gap-2" id="notifActions">
+                <button onclick="activateReply()" class="flex-1 py-2 bg-blue-50 text-blue-600 font-bold rounded-xl text-xs tracking-widest active:scale-95 transition">REPLY</button>
+                <button onclick="dismissNotif()" class="flex-1 py-2 bg-gray-50 text-gray-400 font-bold rounded-xl text-xs tracking-widest active:scale-95 transition">DISMISS</button>
+            </div>
+            <div id="quickReplyBox" class="notif-reply-box">
+                <input type="text" id="quickReplyInput" placeholder="Write a reply..." class="flex-1 bg-gray-100 rounded-full px-4 py-2 text-sm outline-none border">
+                <button id="quickSendBtn" class="bg-blue-600 text-white w-10 h-10 rounded-full flex items-center justify-center shadow-lg"><i class="fas fa-paper-plane"></i></button>
+            </div>
+        </div>
+    </div>
 
     <div id="profileOverlay">
         <div class="h-[50px] border-b flex items-center px-4 bg-white shadow-sm">
             <button onclick="closeProfile()" class="text-[#1877F2] font-bold flex items-center gap-2">
                 <i class="fas fa-arrow-left"></i> Back
             </button>
-            <span id="overlayTitle" class="ml-4 font-bold text-gray-700">Profile</span>
+            <span id="overlayTitle" class="ml-4 font-bold text-gray-700">Chat</span>
         </div>
         <iframe id="profileIframe" src=""></iframe>
     </div>
@@ -68,80 +113,128 @@
         apiKey: "AIzaSyD1mn9MR9hyZ36Ce1lnGyJYmL6AHopScTA",
         authDomain: "social-media-5e6c8.firebaseapp.com",
         databaseURL: "https://social-media-5e6c8-default-rtdb.firebaseio.com/",
-        projectId: "social-media-5e6c8",
-        storageBucket: "social-media-5e6c8.firebasestorage.app",
-        messagingSenderId: "897473713729",
-        appId: "1:897473713729:web:7ba552ed4c1be8754418c0"
+        projectId: "social-media-5e6c8"
     };
     firebase.initializeApp(firebaseConfig);
-    const db = firebase.database();
-    const auth = firebase.auth();
+    const db = firebase.database(), auth = firebase.auth();
 
     const blueBadge = `<svg class="inline-block w-[18px] h-[18px] ml-1 mb-1 text-[#1877F2]" viewBox="0 0 24 24" fill="currentColor"><path d="M9.707 19.121a.997.997 0 01-1.414 0l-5.646-5.647a1.5 1.5 0 010-2.121l.707-.707a1.5 1.5 0 012.121 0L9 14.167l8.528-8.527a1.5 1.5 0 012.122 0l.707.707a1.5 1.5 0 010 2.121l-9.944 9.944a1 1 0 01-.706.709z" /></svg>`;
-
     const urlParams = new URLSearchParams(window.location.search);
-    let targetUid = urlParams.get('uid');
-    let userCache = {};
-    let openCommentSections = {};
+    let targetUid = urlParams.get('uid'), userCache = {}, openCommentSections = {}, myUid = "";
+    
+    let notificationQueue = [], isShowingNotif = false, currentNotifUser = "";
 
-    // Formatting 1K, 1.2K
-    function formatNumber(num) {
-        if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
-        if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
-        return num;
+    function timeAgo(ts) {
+        const s = Math.floor((new Date() - ts) / 1000);
+        return s < 60 ? "Just now" : s < 3600 ? Math.floor(s/60)+"m" : s < 86400 ? Math.floor(s/3600)+"h" : Math.floor(s/86400)+"d";
     }
 
-    // Iframe Controllers
-    function openProfile(uid, name) {
+    function openChatWindow(uid, name) {
         document.getElementById('overlayTitle').innerText = name;
-        document.getElementById('profileIframe').src = `profile.html?uid=${uid}`;
+        document.getElementById('profileIframe').src = `chat.html?uid=${uid}`;
         document.getElementById('profileOverlay').style.display = 'block';
-        document.body.style.overflow = "hidden";
+        history.pushState({ popup: true }, "");
     }
     function closeProfile() {
         document.getElementById('profileOverlay').style.display = 'none';
         document.getElementById('profileIframe').src = "";
-        document.body.style.overflow = "auto";
     }
+    window.onpopstate = () => closeProfile();
 
     auth.onAuthStateChanged(user => {
         if (user) {
-            if (!targetUid) targetUid = user.uid;
-            loadProfile(targetUid, user.uid);
+            myUid = user.uid;
+            // 🟢 Active Presence Logic
+            const userStatusRef = db.ref(`status/${myUid}`);
+            userStatusRef.set({ state: 'online', last_changed: Date.now() });
+            userStatusRef.onDisconnect().set({ state: 'offline', last_changed: Date.now() });
+
+            if (!targetUid) targetUid = myUid;
+            loadProfile(targetUid, myUid);
             loadFollowerCount(targetUid);
-            loadAllData(targetUid, user.uid);
+            loadAllData(targetUid, myUid);
+            listenForNewMessages(); 
         } else { window.location.href = "login.html"; }
     });
 
-    async function loadProfile(uid, myUid) {
+    // 🔔 Notification Logic
+    function listenForNewMessages() {
+        db.ref('chats').on('child_added', snap => {
+            if (snap.key.includes(myUid)) {
+                db.ref(`chats/${snap.key}`).limitToLast(1).on('child_added', async mSnap => {
+                    const m = mSnap.val(), mId = mSnap.key;
+                    if (m.senderId !== myUid && !localStorage.getItem('shown_' + mId)) {
+                        notificationQueue.push({ ...m, id: mId, chatKey: snap.key });
+                        processNotifQueue();
+                    }
+                });
+            }
+        });
+    }
+
+    async function processNotifQueue() {
+        if (isShowingNotif || notificationQueue.length === 0) return;
+        isShowingNotif = true;
+        const m = notificationQueue.shift();
+        localStorage.setItem('shown_' + m.id, 'true');
+        currentNotifUser = m.senderId;
+
+        const uSnap = await db.ref(`user-info/${m.senderId}/profile`).once('value');
+        const user = uSnap.val() || { fullName: "User" };
+
+        document.getElementById('notifImg').src = user.profilePic || 'https://ui-avatars.com/api/?name='+user.fullName;
+        document.getElementById('notifName').innerText = user.fullName;
+        document.getElementById('notifMsg').innerText = m.text;
+        
+        document.getElementById('quickSendBtn').onclick = () => {
+            const replyText = document.getElementById('quickReplyInput').value.trim();
+            if(replyText) {
+                db.ref(`chats/${m.chatKey}`).push({ senderId: myUid, text: replyText, timestamp: Date.now() });
+                dismissNotif();
+            }
+        };
+        
+        document.getElementById('pushNotification').classList.add('show');
+        new Audio('https://raw.githubusercontent.com/Luanfv/messenger-notification-sound/master/messenger_notification.mp3').play().catch(()=>{});
+        setTimeout(() => { if (!document.getElementById('quickReplyBox').classList.contains('active')) dismissNotif(); }, 8000);
+    }
+
+    function activateReply() { document.getElementById('quickReplyBox').classList.add('active'); document.getElementById('quickReplyInput').focus(); }
+    function dismissNotif() { 
+        document.getElementById('pushNotification').classList.remove('show'); 
+        setTimeout(() => { 
+            document.getElementById('quickReplyBox').classList.remove('active'); 
+            document.getElementById('quickReplyInput').value = ""; 
+            isShowingNotif = false;
+            processNotifQueue();
+        }, 600); 
+    }
+    function openChatFromNotif() { openChatWindow(currentNotifUser, "Chat"); dismissNotif(); }
+
+    // --- Profile & Feed ---
+    async function loadProfile(uid, myId) {
         db.ref(`user-info/${uid}/profile`).on('value', snap => {
             const data = snap.val();
             if(!data) return;
             document.getElementById('userName').innerHTML = (data.fullName || "User") + (data.isVerified ? blueBadge : "");
             document.getElementById('userPic').src = data.profilePic || `https://ui-avatars.com/api/?name=${data.fullName}`;
             document.getElementById('userBio').innerText = data.bio || "No bio available";
-            setupButtons(uid, myUid);
+            setupButtons(uid, myId);
         });
     }
 
-    function loadFollowerCount(uid) {
-        db.ref(`user-followers/${uid}`).on('value', snap => {
-            document.getElementById('followerDisplay').innerText = `${formatNumber(snap.numChildren())} Followers`;
-        });
-    }
-
-    function setupButtons(uid, myUid) {
+    function setupButtons(uid, myId) {
         const actions = document.getElementById('profileActions');
-        if (uid === myUid) {
-            actions.innerHTML = `<button onclick="editProfile()" class="bg-[#e4e6eb] text-black px-10 py-2 rounded-lg font-bold text-sm">Edit Profile</button>`;
+        if (uid === myId) {
+            actions.innerHTML = `<button onclick="window.location.href='editprofile.html'" class="bg-[#e4e6eb] text-black px-10 py-2 rounded-lg font-bold text-sm">Edit Profile</button>`;
         } else {
-            db.ref(`user-following/${myUid}/${uid}`).on('value', snap => {
+            db.ref(`user-following/${myId}/${uid}`).on('value', snap => {
                 const isF = snap.exists();
                 actions.innerHTML = `
                     <button onclick="toggleFollow('${uid}', ${isF})" class="px-6 py-2 rounded-lg font-bold text-sm ${isF ? 'bg-gray-200 text-black':'bg-[#1877F2] text-white'}">
                         ${isF ? 'Following' : 'Follow'}
                     </button>
-                    <button onclick="window.location.href='chat.html?receiverId=${uid}'" class="bg-gray-200 text-black px-6 py-2 rounded-lg font-bold text-sm">Message</button>`;
+                    <button onclick="openChatWindow('${uid}', 'Chat')" class="bg-gray-200 text-black px-6 py-2 rounded-lg font-bold text-sm">Message</button>`;
             });
         }
     }
@@ -157,15 +250,13 @@
         }
     }
 
-    function loadAllData(uid, myUid) {
+    function loadAllData(uid, myId) {
         db.ref('user-info').on('value', uSnap => {
             uSnap.forEach(u => { userCache[u.key] = u.val().profile; });
             db.ref('posts').on('value', pSnap => {
                 let posts = [];
-                pSnap.forEach(child => {
-                    if(child.val().uid === uid) posts.push({ id: child.key, ...child.val() });
-                });
-                renderPosts(posts.sort((a,b)=>b.timestamp-a.timestamp), uid === myUid);
+                pSnap.forEach(child => { if(child.val().uid === uid) posts.push({ id: child.key, ...child.val() }); });
+                renderPosts(posts.sort((a,b)=>b.timestamp-a.timestamp), uid === myId);
             });
         });
     }
@@ -177,18 +268,21 @@
             return;
         }
         container.innerHTML = posts.map(post => {
-            const isLiked = post.likedBy && post.likedBy[auth.currentUser.uid];
+            const isLiked = post.likedBy && post.likedBy[myUid];
             const isBoxOpen = openCommentSections[post.id] ? '' : 'hidden';
             return `
             <div class="post-card">
-                <div class="p-3 flex justify-between items-center">
+                <div class="p-3 flex justify-between items-center border-b mx-1">
                     <div class="flex items-center gap-2">
                         <img src="${post.userPhoto}" class="w-8 h-8 rounded-full border">
-                        <p class="font-bold text-sm">${post.userName}</p>
+                        <div>
+                            <p class="font-bold text-sm">${post.userName}</p>
+                            <p class="text-[10px] text-gray-400">${timeAgo(post.timestamp)}</p>
+                        </div>
                     </div>
-                    ${isMine ? `<button onclick="deletePost('${post.id}')" class="text-gray-400"><i class="fas fa-trash"></i></button>` : ''}
+                    ${isMine ? `<button onclick="deletePost('${post.id}')" class="text-gray-300 px-2"><i class="fas fa-trash"></i></button>` : ''}
                 </div>
-                <div class="${post.background && post.background !== 'none' ? 'colored-content' : 'px-4 pb-2 text-[15px]'}" style="background: ${post.background || 'transparent'}">
+                <div class="${post.background && post.background !== 'none' ? 'colored-content' : 'px-4 py-3 text-[15px]'}" style="background: ${post.background || 'transparent'}">
                     ${post.text}
                 </div>
                 <div class="px-4 py-2 flex justify-between text-gray-500 text-xs border-b mx-3">
@@ -202,7 +296,7 @@
                 <div id="sec-${post.id}" class="${isBoxOpen} border-t bg-gray-50/50 p-2">
                     <div class="space-y-3 mb-3 max-h-60 overflow-y-auto">${renderComments(post.comments)}</div>
                     <div class="flex gap-2">
-                        <input type="text" id="in-${post.id}" placeholder="Write a comment..." class="flex-1 bg-white border rounded-full px-4 py-1.5 text-sm outline-none" onkeypress="if(event.key === 'Enter') postComment('${post.id}')">
+                        <input type="text" id="in-${post.id}" placeholder="Write a comment..." class="flex-1 bg-white border rounded-full px-4 py-1.5 text-xs outline-none" onkeypress="if(event.key === 'Enter') postComment('${post.id}')">
                         <button onclick="postComment('${post.id}')" class="text-blue-500 px-2"><i class="fas fa-paper-plane"></i></button>
                     </div>
                 </div>
@@ -210,118 +304,40 @@
         }).join('');
     }
 
+    // 👈 কমেন্টে ক্লিক করলে প্রোফাইল ওপেন হবে এখানে আপডেট করা হয়েছে
     function renderComments(comments) {
         if(!comments) return '';
-        return Object.values(comments).sort((a,b)=>a.timestamp-b.timestamp).map(c => {
+        return Object.values(comments).sort((a,b)=>b.timestamp-a.timestamp).map(c => {
             const p = userCache[c.uid] || {};
             return `
             <div class="flex gap-2">
-                <img src="${c.userPhoto || 'https://ui-avatars.com/api/?name='+c.userName}" class="w-8 h-8 rounded-full cursor-pointer" onclick="openProfile('${c.uid}', '${c.userName}')">
+                <img src="${c.userPhoto || 'https://ui-avatars.com/api/?name='+c.userName}" 
+                     class="w-7 h-7 rounded-full cursor-pointer" 
+                     onclick="window.location.href='profile.html?uid=${c.uid}'">
                 <div class="comment-bubble">
-                    <p class="text-[11px] font-bold cursor-pointer" onclick="openProfile('${c.uid}', '${c.userName}')">${c.userName}${p.isVerified ? blueBadge : ""}</p>
-                    <p class="text-[13px] text-gray-800">${c.text}</p>
+                    <p class="text-[10px] font-bold cursor-pointer hover:underline" 
+                       onclick="window.location.href='profile.html?uid=${c.uid}'">
+                        ${c.userName}${p.isVerified ? blueBadge : ""}
+                    </p>
+                    <p class="text-[12px] text-gray-800">${c.text}</p>
+                    <p class="text-[8px] text-gray-400 mt-1">${timeAgo(c.timestamp)}</p>
                 </div>
             </div>`;
         }).join('');
     }
 
-    async function handleLike(pid) {
-        const ref = db.ref(`posts/${pid}/likedBy/${auth.currentUser.uid}`);
-        const snap = await ref.get();
-        snap.exists() ? await ref.remove() : await ref.set(true);
-    }
-
+    async function handleLike(pid) { const ref = db.ref(`posts/${pid}/likedBy/${myUid}`); (await ref.get()).exists() ? await ref.remove() : await ref.set(true); }
     async function postComment(pid) {
-        const input = document.getElementById(`in-${pid}`);
-        const text = input.value.trim();
-        if(!text) return;
-        
-        openCommentSections[pid] = true; // বক্সে খোলা রাখার জন্য স্টেট আপডেট
-        const myP = userCache[auth.currentUser.uid];
-        await db.ref(`posts/${pid}/comments`).push({
-            uid: auth.currentUser.uid, userName: myP.fullName,
-            userPhoto: myP.profilePic, text: text, timestamp: Date.now()
-        });
-        input.value = "";
-    }
-
-    function toggleComments(pid) {
-        const el = document.getElementById(`sec-${pid}`);
-        el.classList.toggle('hidden');
-        openCommentSections[pid] = !el.classList.contains('hidden');
-    }
-
-    function editProfile() {
-        Swal.fire({
-            title: 'Profile Settings',
-            html: `<button onclick="window.location.href='editprofile.html'" class="bg-[#1877F2] text-white w-full py-3 rounded-xl font-bold">Personal Information</button>`,
-            showConfirmButton: false, showCloseButton: true
-        });
-    }
-
-    async function deletePost(pid) {
-        const res = await Swal.fire({ text: 'Delete post?', icon: 'warning', showCancelButton: true });
-        if(res.isConfirmed) await db.ref(`posts/${pid}`).remove();
-    }
-</script>
-<script>
-    // ... আগের সব কনফিগ এবং ভেরিয়েবল ঠিক থাকবে ...
-    
-    // সময় বের করার ফাংশন (টাইমস্ট্যাম্প থেকে)
-    function timeAgo(ts) {
-        const s = Math.floor((new Date() - ts) / 1000);
-        if (s < 60) return "Just now";
-        if (s < 3600) return Math.floor(s / 60) + "m ago";
-        if (s < 86400) return Math.floor(s / 3600) + "h ago";
-        return Math.floor(s / 86400) + "d ago";
-    }
-    
-    // কমেন্ট রেন্ডার করার ফাংশন (আপডেটেড)
-    function renderComments(comments) {
-        if (!comments) return '';
-        
-        // কমেন্টগুলোকে অবজেক্ট থেকে অ্যারেতে নিয়ে টাইমস্ট্যাম্প অনুযায়ী সর্ট করা (নতুনগুলো উপরে)
-        const sortedComments = Object.values(comments).sort((a, b) => b.timestamp - a.timestamp);
-        
-        return sortedComments.map(c => {
-            const p = userCache[c.uid] || {};
-            return `
-            <div class="flex gap-2">
-                <img src="${c.userPhoto || 'https://ui-avatars.com/api/?name='+c.userName}" class="w-8 h-8 rounded-full cursor-pointer" onclick="openProfile('${c.uid}', '${c.userName}')">
-                <div class="comment-bubble">
-                    <div class="flex items-center gap-2">
-                        <p class="text-[11px] font-bold cursor-pointer" onclick="openProfile('${c.uid}', '${c.userName}')">
-                            ${c.userName}${p.isVerified ? blueBadge : ""}
-                        </p>
-                        <span class="text-[10px] text-gray-500">${timeAgo(c.timestamp)}</span>
-                    </div>
-                    <p class="text-[13px] text-gray-800">${c.text}</p>
-                </div>
-            </div>`;
-        }).join('');
-    }
-    
-    // কমেন্ট পোস্ট করার ফাংশন (বক্স খোলা রাখার লজিকসহ)
-    async function postComment(pid) {
-        const input = document.getElementById(`in-${pid}`);
-        const text = input.value.trim();
-        if (!text) return;
-        
+        const inp = document.getElementById(`in-${pid}`);
+        if(!inp.value.trim()) return;
         openCommentSections[pid] = true;
-        const myP = userCache[auth.currentUser.uid];
-        
-        await db.ref(`posts/${pid}/comments`).push({
-            uid: auth.currentUser.uid,
-            userName: myP.fullName,
-            userPhoto: myP.profilePic,
-            text: text,
-            timestamp: Date.now() // বর্তমান সময় সেভ হচ্ছে
-        });
-        
-        input.value = "";
+        const myP = userCache[myUid];
+        await db.ref(`posts/${pid}/comments`).push({ uid: myUid, userName: myP.fullName, userPhoto: myP.profilePic, text: inp.value.trim(), timestamp: Date.now() });
+        inp.value = "";
     }
-    
-    // ... বাকি ফাংশনগুলো আগের মতোই থাকবে ...
+    function toggleComments(pid) { document.getElementById(`sec-${pid}`).classList.toggle('hidden'); openCommentSections[pid] = !document.getElementById(`sec-${pid}`).classList.contains('hidden'); }
+    async function deletePost(pid) { if((await Swal.fire({ text: 'Delete post?', icon: 'warning', showCancelButton: true })).isConfirmed) await db.ref(`posts/${pid}`).remove(); }
+    function loadFollowerCount(uid) { db.ref(`user-followers/${uid}`).on('value', snap => { document.getElementById('followerDisplay').innerText = `${snap.numChildren()} Followers`; }); }
 </script>
 </body>
 </html>
