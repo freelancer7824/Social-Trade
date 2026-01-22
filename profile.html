@@ -8,7 +8,6 @@
     
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
 
     <style>
         html { scroll-behavior: smooth; }
@@ -128,26 +127,26 @@
                     <h2 class="text-3xl md:text-4xl font-black text-gray-900">Why Trust <span class="text-blue-600">SocialTrade?</span></h2>
                 </div>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 text-center">
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                         <div class="text-blue-600 mb-4 flex justify-center">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
                         </div>
-                        <h3 class="text-lg font-bold mb-2">Verified Sellers</h3>
-                        <p class="text-gray-600 text-sm">Every account is manually verified by our experts before listing.</p>
+                        <h3 class="text-lg font-bold mb-2 text-center">Verified Sellers</h3>
+                        <p class="text-gray-600 text-sm text-center">Every account is manually verified by our experts before listing.</p>
                     </div>
-                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 text-center">
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                         <div class="text-green-600 mb-4 flex justify-center">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                         </div>
-                        <h3 class="text-lg font-bold mb-2">Escrow Protection</h3>
-                        <p class="text-gray-600 text-sm">Funds are held safely until the buyer confirms account ownership.</p>
+                        <h3 class="text-lg font-bold mb-2 text-center">Escrow Protection</h3>
+                        <p class="text-gray-600 text-sm text-center">Funds are held safely until the buyer confirms account ownership.</p>
                     </div>
-                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 text-center">
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                         <div class="text-purple-600 mb-4 flex justify-center">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
                         </div>
-                        <h3 class="text-lg font-bold mb-2">Instant Transfer</h3>
-                        <p class="text-gray-600 text-sm">Automated systems for quick and hassle-free account handovers.</p>
+                        <h3 class="text-lg font-bold mb-2 text-center">Instant Transfer</h3>
+                        <p class="text-gray-600 text-sm text-center">Automated systems for quick and hassle-free account handovers.</p>
                     </div>
                 </div>
             </div>
@@ -188,39 +187,28 @@
     </footer>
 
     <script>
+        // --- 1. Firebase Config ---
         const firebaseConfig = {
-            apiKey: "AIzaSyD1mn9MR9hyZ36Ce1lnGyJYmL6AHopScTA",
-            authDomain: "social-media-5e6c8.firebaseapp.com",
-            databaseURL: "https://social-media-5e6c8-default-rtdb.firebaseio.com/",
-            projectId: "social-media-5e6c8",
-            storageBucket: "social-media-5e6c8.firebasestorage.app",
-            messagingSenderId: "897473713729",
-            appId: "1:897473713729:web:7ba552ed4c1be8754418c0",
-            measurementId: "G-7JJTYPSX5P"
-        };
+  apiKey: "AIzaSyD1mn9MR9hyZ36Ce1lnGyJYmL6AHopScTA",
+  authDomain: "social-media-5e6c8.firebaseapp.com",
+  databaseURL: "https://social-media-5e6c8-default-rtdb.firebaseio.com/",
+  projectId: "social-media-5e6c8",
+  storageBucket: "social-media-5e6c8.firebasestorage.app",
+  messagingSenderId: "897473713729",
+  appId: "1:897473713729:web:7ba552ed4c1be8754418c0",
+  measurementId: "G-7JJTYPSX5P"
+};
         firebase.initializeApp(firebaseConfig);
         const auth = firebase.auth();
-        const db = firebase.database();
 
-        // 🛡️ MODIFIED: REDIRECT LOGIC
+        // --- 2. Login Redirect Logic ---
         auth.onAuthStateChanged((user) => {
             if (user) {
-                // Real-time listener: user block holei page redirect hobe
-                db.ref(`user-info/${user.uid}/profile`).on('value', (snapshot) => {
-                    const userData = snapshot.val();
-                    
-                    if (userData && (userData.isBlocked === true || userData.status === "blocked")) {
-                        // User Blocked thakle
-                        window.location.href = "error.html";
-                    } else {
-                        // User Block na thakle Login obosthay sorasori Dashboard/Account visit korbe
-                        window.location.href = "account.html"; 
-                    }
-                });
+                window.location.href = "account.html";
             }
         });
 
-        // Dropdown Menu Toggle
+        // --- 3. Dropdown Menu Toggle ---
         const loginBtn = document.getElementById('loginBtn');
         const dropdownMenu = document.getElementById('dropdownMenu');
         
@@ -235,11 +223,13 @@
             }
         });
 
+        // --- 4. WhatsApp Redirect Logic ---
         function redirectToWhatsApp() {
             const phoneText = document.getElementById('phoneText').innerText;
             const cleanNumber = phoneText.replace(/\D/g, ''); 
             window.open(`https://wa.me/${cleanNumber}`, '_blank');
         }
     </script>
+
 </body>
 </html>
