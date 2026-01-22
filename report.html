@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Report User - SocialTrade</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
+
+    <div class="bg-white w-full max-w-md rounded-3xl shadow-xl overflow-hidden border border-gray-100">
+        <div class="bg-red-500 p-6 text-white text-center">
+            <i class="fas fa-shield-alt text-4xl mb-2"></i>
+            <h2 class="text-xl font-black uppercase tracking-widest">Report User</h2>
+            <p class="text-xs opacity-80">Help us keep the community safe</p>
+        </div>
+
+        <form id="reportForm" class="p-6 space-y-4">
+            <div>
+                <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Reason for reporting</label>
+                <select id="reportType" required class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-red-400 outline-none transition">
+                    <option value="" disabled selected>Select a type</option>
+                    <option value="Spam">Spam / Fraud</option>
+                    <option value="18+ Content">18+ Content</option>
+                    <option value="Harassment">Harassment</option>
+                    <option value="Others">Others</option>
+                </select>
+            </div>
+
+            <div>
+                <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Details</label>
+                <textarea id="description" required rows="3" placeholder="Tell us more about the issue..." class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-red-400 outline-none transition"></textarea>
+            </div>
+
+            <div>
+                <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Proof (Screenshot)</label>
+                <div class="relative group">
+                    <input type="file" id="imageInput" accept="image/*" class="hidden" onchange="previewImage(event)">
+                    <label for="imageInput" class="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-200 rounded-xl cursor-pointer hover:bg-red-50 transition overflow-hidden">
+                        <div id="previewContainer" class="text-center">
+                            <i class="fas fa-camera text-gray-300 text-2xl mb-2"></i>
+                            <p class="text-[10px] text-gray-400 font-bold uppercase">Click to upload photo</p>
+                        </div>
+                        <img id="imgPreview" class="hidden w-full h-full object-cover">
+                    </label>
+                </div>
+            </div>
+
+            <button type="submit" id="submitBtn" class="w-full bg-red-500 text-white font-black py-4 rounded-xl shadow-lg shadow-red-100 hover:bg-red-600 transition active:scale-95 uppercase tracking-widest text-xs">
+                Submit Report
+            </button>
+            <button type="button" onclick="window.history.back()" class="w-full text-gray-400 font-bold text-xs uppercase pt-2">Cancel</button>
+        </form>
+    </div>
+
+    <script>
+        // --- Firebase Config ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyD1mn9MR9hyZ36Ce1lnGyJYmL6AHopScTA",
+            authDomain: "social-media-5e6c8.firebaseapp.com",
+            databaseURL: "https://social-media-5e6c8-default-rtdb.firebaseio.com/",
+            projectId: "social-media-5e6c8"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database(), auth = firebase.auth();
+
+        // --- URL Parameters ---
+        const urlParams = new URLSearchParams(window.location.search);
+        const targetUid = urlParams.get('targetUid');
+
+        // --- Cloudinary Config ---
+        const CLOUDINARY_URL = "https://api.cloudinary.com/v1_1/dmod7msh6/image/upload";
+        const CLOUDINARY_PRESET = "social_trade_reports"; // আপনার ক্লাউডিনারি আনসাইনড প্রিসেট নাম দিন
+
+        function previewImage(event) {
+            const reader = new FileReader();
+            reader.onload = function() {
+                const output = document.getElementById('imgPreview');
+                const container = document.getElementById('previewContainer');
+                output.src = reader.result;
+                output.classList.remove('hidden');
+                container.classList.add('hidden');
+            };
+            reader.readAsDataURL(event.target.files[0]);
+        }
+
+        document.getElementById('reportForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const user = auth.currentUser;
+            if(!user) return Swal.fire('Error', 'Please login first', 'error');
+            if(!targetUid) return Swal.fire('Error', 'Target user not found', 'error');
+
+            const submitBtn = document.getElementById('submitBtn');
+            const file = document.getElementById('imageInput').files[0];
+            const type = document.getElementById('reportType').value;
+            const desc = document.getElementById('description').value;
+
+            submitBtn.disabled = true;
+            submitBtn.innerText = "UPLOADING...";
+
+            try {
+                let imageUrl = "";
+                
+                // 1. Upload to Cloudinary
+                if(file) {
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    formData.append('upload_preset', "unsi_preset"); // Change "unsi_preset" to your Cloudinary Unsigned Preset
+
+                    const res = await fetch(CLOUDINARY_URL, { method: 'POST', body: formData });
+                    const data = await res.json();
+                    imageUrl = data.secure_url;
+                }
+
+                // 2. Save to Firebase
+                const reportData = {
+                    reporterId: user.uid,
+                    targetId: targetUid,
+                    type: type,
+                    description: desc,
+                    proofImage: imageUrl,
+                    status: "pending",
+                    timestamp: Date.now()
+                };
+
+                // Save under target user for admin to see
+                await db.ref(`user-info/${targetUid}/reports`).push(reportData);
+                // Also save in a global reports node for easier admin management
+                await db.ref(`all-reports`).push(reportData);
+
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Report Submitted',
+                    text: 'Your report is now pending for review.',
+                    confirmButtonColor: '#ef4444'
+                }).then(() => {
+                    window.history.back();
+                });
+
+            } catch (err) {
+                console.error(err);
+                Swal.fire('Error', 'Something went wrong!', 'error');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerText = "SUBMIT REPORT";
+            }
+        };
+    </script>
+</body>
+</html>
