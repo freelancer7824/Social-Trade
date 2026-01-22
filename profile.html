@@ -303,7 +303,24 @@
             </div>`;
         }).join('');
     }
-
+function setupButtons(uid, myId) {
+    const actions = document.getElementById('profileActions');
+    if (uid === myId) {
+        actions.innerHTML = `<button onclick="window.location.href='editprofile.html'" class="bg-[#e4e6eb] text-black px-10 py-2 rounded-lg font-bold text-sm">Edit Profile</button>`;
+    } else {
+        db.ref(`user-following/${myId}/${uid}`).on('value', snap => {
+            const isF = snap.exists();
+            actions.innerHTML = `
+                <button onclick="toggleFollow('${uid}', ${isF})" class="px-6 py-2 rounded-lg font-bold text-sm ${isF ? 'bg-gray-200 text-black':'bg-[#1877F2] text-white'}">
+                    ${isF ? 'Following' : 'Follow'}
+                </button>
+                <button onclick="openChatWindow('${uid}', 'Chat')" class="bg-gray-200 text-black px-6 py-2 rounded-lg font-bold text-sm">Message</button>
+                <button onclick="window.location.href='report.html?targetUid=${uid}'" class="bg-red-100 text-red-600 px-3 py-2 rounded-lg font-bold text-sm" title="Report User">
+                    <i class="fas fa-flag"></i>
+                </button>`;
+        });
+    }
+}
     // 👈 কমেন্টে ক্লিক করলে প্রোফাইল ওপেন হবে এখানে আপডেট করা হয়েছে
     function renderComments(comments) {
         if(!comments) return '';
