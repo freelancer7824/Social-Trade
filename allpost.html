@@ -272,6 +272,22 @@
     document.getElementById('searchInput').addEventListener('input', () => renderFeed());
 </script>
 </body>
+</html>        await db.ref(`posts/${pid}/comments`).push({
+            uid: auth.currentUser.uid, userName: myProfile.fullName || "User",
+            userPhoto: myProfile.profilePic || "", text: text, timestamp: Date.now()
+        });
+        input.value = "";
+    }
+
+    function toggleComments(pid) {
+        const el = document.getElementById(`sec-${pid}`);
+        el.classList.toggle('hidden');
+        openCommentSections[pid] = !el.classList.contains('hidden');
+    }
+
+    document.getElementById('searchInput').addEventListener('input', () => renderFeed());
+</script>
+</body>
 </html>    }
 
     auth.onAuthStateChanged(async (user) => {
