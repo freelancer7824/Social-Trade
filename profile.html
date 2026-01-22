@@ -42,10 +42,6 @@
         }
         .notif-reply-box { display: none; margin-top: 15px; border-top: 1px solid #f0f0f0; padding-top: 12px; }
         .notif-reply-box.active { display: flex; gap: 10px; align-items: center; }
-
-        /* Iframe Modal Overlay */
-        #profileOverlay { display: none; position: fixed; inset: 0; z-index: 5000; background: white; }
-        #profileIframe { width: 100%; height: calc(100% - 50px); border: none; }
     </style>
 </head>
 <body class="pb-10">
@@ -74,16 +70,6 @@
                 <button id="quickSendBtn" class="bg-blue-600 text-white w-10 h-10 rounded-full flex items-center justify-center shadow-lg"><i class="fas fa-paper-plane"></i></button>
             </div>
         </div>
-    </div>
-
-    <div id="profileOverlay">
-        <div class="h-[50px] border-b flex items-center px-4 bg-white shadow-sm">
-            <button onclick="closeProfile()" class="text-[#1877F2] font-bold flex items-center gap-2">
-                <i class="fas fa-arrow-left"></i> Back
-            </button>
-            <span id="overlayTitle" class="ml-4 font-bold text-gray-700">Chat</span>
-        </div>
-        <iframe id="profileIframe" src=""></iframe>
     </div>
 
     <div id="profileWrapper" class="max-w-[500px] mx-auto">
@@ -129,22 +115,14 @@
         return s < 60 ? "Just now" : s < 3600 ? Math.floor(s/60)+"m" : s < 86400 ? Math.floor(s/3600)+"h" : Math.floor(s/86400)+"d";
     }
 
-    function openChatWindow(uid, name) {
-        document.getElementById('overlayTitle').innerText = name;
-        document.getElementById('profileIframe').src = `chat.html?uid=${uid}`;
-        document.getElementById('profileOverlay').style.display = 'block';
-        history.pushState({ popup: true }, "");
+    // 🚀 MODIFIED: Visit Chat page directly
+    function visitChat(uid) {
+        window.location.href = `chat.html?uid=${uid}`;
     }
-    function closeProfile() {
-        document.getElementById('profileOverlay').style.display = 'none';
-        document.getElementById('profileIframe').src = "";
-    }
-    window.onpopstate = () => closeProfile();
 
     auth.onAuthStateChanged(user => {
         if (user) {
             myUid = user.uid;
-            // 🟢 Active Presence Logic
             const userStatusRef = db.ref(`status/${myUid}`);
             userStatusRef.set({ state: 'online', last_changed: Date.now() });
             userStatusRef.onDisconnect().set({ state: 'offline', last_changed: Date.now() });
@@ -157,7 +135,7 @@
         } else { window.location.href = "login.html"; }
     });
 
-    // 🔔 Notification Logic
+    // 🔔 Notification logic updated to use visitChat
     function listenForNewMessages() {
         db.ref('chats').on('child_added', snap => {
             if (snap.key.includes(myUid)) {
@@ -209,14 +187,8 @@
             processNotifQueue();
         }, 600); 
     }
-    function openChatFromNotif() {
-    if (currentNotifUser) {
-        window.location.href = `chat.html?uid=${currentNotifUser}`;
-    }
-    dismissNotif();
-}
+    function openChatFromNotif() { visitChat(currentNotifUser); dismissNotif(); }
 
-    // --- Profile & Feed ---
     async function loadProfile(uid, myId) {
         db.ref(`user-info/${uid}/profile`).on('value', snap => {
             const data = snap.val();
@@ -239,7 +211,10 @@
                     <button onclick="toggleFollow('${uid}', ${isF})" class="px-6 py-2 rounded-lg font-bold text-sm ${isF ? 'bg-gray-200 text-black':'bg-[#1877F2] text-white'}">
                         ${isF ? 'Following' : 'Follow'}
                     </button>
-                    <button onclick="openChatWindow('${uid}', 'Chat')" class="bg-gray-200 text-black px-6 py-2 rounded-lg font-bold text-sm">Message</button>`;
+                    <button onclick="visitChat('${uid}')" class="bg-gray-200 text-black px-6 py-2 rounded-lg font-bold text-sm">Message</button>
+                    <button onclick="window.location.href='report.html?targetUid=${uid}'" class="bg-red-100 text-red-600 px-3 py-2 rounded-lg font-bold text-sm" title="Report User">
+                        <i class="fas fa-flag"></i>
+                    </button>`;
             });
         }
     }
@@ -308,25 +283,7 @@
             </div>`;
         }).join('');
     }
-function setupButtons(uid, myId) {
-    const actions = document.getElementById('profileActions');
-    if (uid === myId) {
-        actions.innerHTML = `<button onclick="window.location.href='editprofile.html'" class="bg-[#e4e6eb] text-black px-10 py-2 rounded-lg font-bold text-sm">Edit Profile</button>`;
-    } else {
-        db.ref(`user-following/${myId}/${uid}`).on('value', snap => {
-            const isF = snap.exists();
-            actions.innerHTML = `
-                <button onclick="toggleFollow('${uid}', ${isF})" class="px-6 py-2 rounded-lg font-bold text-sm ${isF ? 'bg-gray-200 text-black':'bg-[#1877F2] text-white'}">
-                    ${isF ? 'Following' : 'Follow'}
-                </button>
-                <button onclick="openChatWindow('${uid}', 'Chat')" class="bg-gray-200 text-black px-6 py-2 rounded-lg font-bold text-sm">Message</button>
-                <button onclick="window.location.href='report.html?targetUid=${uid}'" class="bg-red-100 text-red-600 px-3 py-2 rounded-lg font-bold text-sm" title="Report User">
-                    <i class="fas fa-flag"></i>
-                </button>`;
-        });
-    }
-}
-    // 👈 কমেন্টে ক্লিক করলে প্রোফাইল ওপেন হবে এখানে আপডেট করা হয়েছে
+
     function renderComments(comments) {
         if(!comments) return '';
         return Object.values(comments).sort((a,b)=>b.timestamp-a.timestamp).map(c => {
