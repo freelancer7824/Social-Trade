@@ -3,233 +3,320 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SocialTrade - Buy & Sell Social Accounts</title>
+    <title>User Profile - SocialTrade</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
 
     <style>
-        html { scroll-behavior: smooth; }
-
-        /* Phone Shake Animation */
-        @keyframes phone-shake {
-            0%, 100% { transform: rotate(0); }
-            10%, 30%, 50% { transform: rotate(-15deg); }
-            20%, 40%, 60% { transform: rotate(15deg); }
+        body { background-color: #f0f2f5; font-family: 'Segoe UI', system-ui, sans-serif; overflow-anchor: none; }
+        .post-card { background: white; border-radius: 8px; margin-bottom: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); border: 1px solid #dddfe2; }
+        .colored-content { min-height: 250px; display: flex; align-items: center; justify-content: center; padding: 30px; text-align: center; font-size: 1.5rem; font-weight: 800; color: white; }
+        .profile-header { background: white; border-bottom: 1px solid #dddfe2; }
+        .cover-photo { height: 160px; background: linear-gradient(to right, #1877F2, #00C6FF); }
+        .profile-pic { width: 120px; height: 120px; border-radius: 50%; border: 4px solid white; margin-top: -60px; object-fit: cover; background: #eee; }
+        
+        .action-btn { flex: 1; padding: 8px 0; font-size: 14px; font-weight: 600; color: #65676b; display: flex; align-items: center; justify-content: center; gap: 8px; }
+        .active-like { color: #1877F2 !important; }
+        .comment-bubble { background: #f0f2f5; border-radius: 15px; padding: 6px 12px; max-width: 85%; }
+        
+        /* 🔔 Stylish Push Notification */
+        #pushNotification { 
+            position: fixed; top: -250px; left: 50%; transform: translateX(-50%);
+            width: 95%; max-width: 450px; z-index: 99999; 
+            transition: all 0.6s cubic-bezier(0.68, -0.55, 0.27, 1.55);
         }
-        .animate-phone { display: inline-block; animation: phone-shake 2s infinite; }
-
-        /* Hero Text Slider */
-        .slider-wrapper { height: 1.2em; overflow: hidden; display: inline-block; vertical-align: bottom; }
-        .slider-text { display: flex; flex-direction: column; animation: move-up 10s cubic-bezier(0.645, 0.045, 0.355, 1) infinite; }
-        @keyframes move-up {
-            0%, 20% { transform: translateY(0); }
-            25%, 45% { transform: translateY(-25%); }
-            50%, 70% { transform: translateY(-50%); }
-            75%, 95% { transform: translateY(-75%); }
-            100% { transform: translateY(0); }
+        #pushNotification.show { top: 20px; }
+        .notif-card { 
+            background: white; border-radius: 25px; padding: 15px; 
+            box-shadow: 0 20px 60px rgba(0,0,0,0.2); border: 1px solid rgba(0,0,0,0.05); 
         }
-
-        /* Floating & Glowing Chat Button Animation */
-        @keyframes floating {
-            0% { transform: translateY(0px); box-shadow: 0 5px 15px rgba(37, 99, 235, 0.4); }
-            50% { transform: translateY(-10px); box-shadow: 0 15px 25px rgba(37, 99, 235, 0.6); }
-            100% { transform: translateY(0px); box-shadow: 0 5px 15px rgba(37, 99, 235, 0.4); }
+        .notif-badge {
+            position: absolute; top: -5px; right: -5px;
+            background: #ff3b30; color: white; font-size: 10px;
+            font-weight: bold; padding: 2px 6px; border-radius: 10px; border: 2px solid white;
         }
-        .live-chat-btn { animation: floating 3s ease-in-out infinite; }
+        .notif-reply-box { display: none; margin-top: 15px; border-top: 1px solid #f0f0f0; padding-top: 12px; }
+        .notif-reply-box.active { display: flex; gap: 10px; align-items: center; }
     </style>
 </head>
-<body class="bg-gray-50 flex flex-col min-h-screen relative">
+<body class="pb-10">
 
-    <nav class="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-50">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between h-16 items-center">
-                <div class="flex-shrink-0 flex items-center cursor-pointer">
-                    <span class="text-xl md:text-2xl font-extrabold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-                        <img style="width:160px" src="log.png" alt="Social Trade">
-                    </span>
+    <div id="pushNotification">
+        <div class="notif-card">
+            <div class="flex items-center gap-4 cursor-pointer" onclick="openChatFromNotif()">
+                <div class="relative">
+                    <img id="notifImg" src="" class="w-14 h-14 rounded-full object-cover border-2 border-blue-500">
+                    <span class="notif-badge">New</span>
                 </div>
-                
-                <div class="flex items-center space-x-3 md:space-x-8">
-                    <a href="javascript:void(0)" onclick="redirectToWhatsApp()" class="flex items-center text-gray-600 hover:text-green-600 transition duration-300 font-medium text-xs md:text-base">
-                        <span class="animate-phone">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1 text-green-500" fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L0 24l6.335-1.662c1.72.94 3.675 1.439 5.662 1.439h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
-                            </svg>
-                        </span>
-                        <span id="phoneText" class="hidden sm:inline">+880 1712-345678</span>
-                    </a>
-
-                    <div class="relative inline-block text-left">
-                        <button id="loginBtn" class="inline-flex items-center justify-center px-4 py-1.5 md:px-5 md:py-2 border border-transparent text-sm font-bold rounded-full text-white bg-blue-600 hover:bg-blue-700 focus:outline-none transition duration-300 shadow-md">
-                            Login
-                            <svg class="-mr-1 ml-2 h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
-                                <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
-                            </svg>
-                        </button>
-                        <div id="dropdownMenu" class="hidden absolute right-0 mt-2 w-48 md:w-56 rounded-xl shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-50">
-                            <div class="py-2" role="menu">
-                                <a href="login.html" class="block px-4 py-3 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 border-b border-gray-100" role="menuitem">Sign In</a>
-                                <a href="signup.html" class="block px-4 py-3 text-sm text-green-600 font-bold hover:bg-green-50" role="menuitem">Create Account</a>
-                            </div>
-                        </div>
+                <div class="flex-1 overflow-hidden">
+                    <div class="flex justify-between items-center">
+                        <span id="notifName" class="font-black text-gray-800">User Name</span>
+                        <span class="text-[10px] text-blue-600 font-bold uppercase">Chat</span>
                     </div>
+                    <p id="notifMsg" class="text-sm text-gray-500 truncate mt-0.5">Message preview...</p>
                 </div>
+            </div>
+            <div class="flex mt-3 gap-2" id="notifActions">
+                <button onclick="activateReply()" class="flex-1 py-2 bg-blue-50 text-blue-600 font-bold rounded-xl text-xs tracking-widest active:scale-95 transition">REPLY</button>
+                <button onclick="dismissNotif()" class="flex-1 py-2 bg-gray-50 text-gray-400 font-bold rounded-xl text-xs tracking-widest active:scale-95 transition">DISMISS</button>
+            </div>
+            <div id="quickReplyBox" class="notif-reply-box">
+                <input type="text" id="quickReplyInput" placeholder="Write a reply..." class="flex-1 bg-gray-100 rounded-full px-4 py-2 text-sm outline-none border">
+                <button id="quickSendBtn" class="bg-blue-600 text-white w-10 h-10 rounded-full flex items-center justify-center shadow-lg"><i class="fas fa-paper-plane"></i></button>
             </div>
         </div>
-    </nav>
+    </div>
 
-    <main class="flex-grow">
-        <header class="bg-white py-12 md:py-24 px-4 overflow-hidden text-center">
-            <div class="max-w-7xl mx-auto">
-                <h1 class="text-3xl md:text-6xl font-black text-gray-900 leading-tight">
-                    Trusted Platform to <br class="hidden md:block">
-                    <span class="text-blue-600 slider-wrapper">
-                        <span class="slider-text text-left">
-                            <span>Buy FB Accounts</span>
-                            <span>Sell YouTube Channels</span>
-                            <span>Trade Instagram Pages</span>
-                            <span>Grow TikTok Assets</span>
-                        </span>
-                    </span>
-                </h1>
-                <p class="mt-6 text-base md:text-xl text-gray-600 max-w-2xl mx-auto font-medium">The world's leading marketplace to buy and sell established social media accounts securely.</p>
-                <div class="mt-10 flex flex-col sm:flex-row justify-center gap-4 px-6">
-                    <button class="w-full sm:w-auto px-8 py-4 bg-blue-600 text-white font-bold rounded-2xl shadow-xl hover:bg-blue-700 transition duration-300">Explore Marketplace</button>
-                    <a href="#how-it-works" class="w-full sm:w-auto px-8 py-4 bg-white border-2 border-gray-200 text-center text-gray-800 font-bold rounded-2xl hover:bg-gray-50 transition duration-300">How it Works?</a>
-                </div>
+    <div id="profileWrapper" class="max-w-[500px] mx-auto">
+        <div class="profile-header pb-4 shadow-sm">
+            <div class="cover-photo flex items-start p-3">
+                <a href="feed.html" class="text-white bg-black/20 w-8 h-8 flex items-center justify-center rounded-full"><i class="fas fa-arrow-left"></i></a>
             </div>
-        </header>
-
-        <section id="how-it-works" class="py-16 bg-white border-t border-gray-100">
-            <div class="max-w-7xl mx-auto px-4 flex flex-col lg:flex-row items-center gap-12">
-                <div class="w-full lg:w-1/2">
-                    <div class="relative rounded-3xl overflow-hidden shadow-2xl bg-black aspect-video">
-                        <iframe class="w-full h-full" src="https://www.youtube.com/embed/8HgvuM1-ijw" title="How it works" frameborder="0" allowfullscreen></iframe>
-                    </div>
-                </div>
-                <div class="w-full lg:w-1/2">
-                    <h2 class="text-3xl md:text-4xl font-black text-gray-900 mb-6">Watch How to <span class="text-blue-600">Start Trading</span></h2>
-                    <p class="text-gray-600 text-lg mb-6">Learn about our secure escrow process and listing management in minutes.</p>
-                    <ul class="space-y-3">
-                        <li class="flex items-center text-gray-700 font-medium">✅ Learn how to list your account.</li>
-                        <li class="flex items-center text-gray-700 font-medium">✅ Secure Escrow payment system.</li>
-                        <li class="flex items-center text-gray-700 font-medium">✅ 100% Account safety guarantee.</li>
-                    </ul>
-                </div>
-            </div>
-        </section>
-
-        <section class="py-16 bg-gray-50 border-t border-gray-100">
-            <div class="max-w-7xl mx-auto px-4">
-                <div class="text-center mb-12">
-                    <h2 class="text-3xl md:text-4xl font-black text-gray-900">Why Trust <span class="text-blue-600">SocialTrade?</span></h2>
-                </div>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                        <div class="text-blue-600 mb-4 flex justify-center">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
-                        </div>
-                        <h3 class="text-lg font-bold mb-2 text-center">Verified Sellers</h3>
-                        <p class="text-gray-600 text-sm text-center">Every account is manually verified by our experts before listing.</p>
-                    </div>
-                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                        <div class="text-green-600 mb-4 flex justify-center">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                        </div>
-                        <h3 class="text-lg font-bold mb-2 text-center">Escrow Protection</h3>
-                        <p class="text-gray-600 text-sm text-center">Funds are held safely until the buyer confirms account ownership.</p>
-                    </div>
-                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                        <div class="text-purple-600 mb-4 flex justify-center">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                        </div>
-                        <h3 class="text-lg font-bold mb-2 text-center">Instant Transfer</h3>
-                        <p class="text-gray-600 text-sm text-center">Automated systems for quick and hassle-free account handovers.</p>
-                    </div>
-                </div>
-            </div>
-        </section>
-    </main>
-
-    <a href="support.html" class="live-chat-btn fixed bottom-6 right-6 z-[9999] flex items-center bg-blue-600 text-white px-4 py-2.5 rounded-full shadow-lg border-2 border-white/20 hover:bg-blue-700 transition duration-300">
-        <div class="relative flex items-center">
-            <span class="flex h-2.5 w-2.5 mr-2">
-                <span class="animate-ping absolute inline-flex h-2.5 w-2.5 rounded-full bg-green-400 opacity-75"></span>
-                <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span>
-            </span>
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-            </svg>
-            <span class="text-sm font-bold tracking-tight whitespace-nowrap">Live Chat</span>
-        </div>
-    </a>
-
-    <footer class="bg-white border-t border-gray-200 pt-8 pb-6">
-        <div class="max-w-7xl mx-auto px-4 text-center">
-            <div class="flex flex-col md:flex-row justify-between items-center gap-6">
-                <div class="text-xl font-black text-gray-900">SOCIAL<span class="text-blue-600">TRADE</span></div>
-                <div class="flex space-x-6 text-sm font-semibold text-gray-600">
-                    <a href="#" class="hover:text-blue-600">Marketplace</a>
-                    <a href="#" class="hover:text-blue-600">Support</a>
-                    <a href="#" class="hover:text-blue-600">Privacy</a>
-                </div>
-                <div class="flex space-x-4">
-                    <div class="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-xs">FB</div>
-                    <div class="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-xs">IG</div>
-                </div>
-            </div>
-            <div class="mt-8 pt-6 border-t border-gray-100 text-sm text-gray-400">
-                &copy; 2026 SocialTrade Inc. All rights reserved.
+            <div class="px-4 text-center">
+                <img id="userPic" src="" class="profile-pic mx-auto shadow-md">
+                <h2 id="userName" class="text-2xl font-bold mt-2 text-[#050505]">Loading...</h2>
+                <p id="followerDisplay" class="text-[#1877F2] font-bold text-sm mb-1">0 Followers</p>
+                <p id="userBio" class="text-gray-500 text-sm italic px-6">User Bio</p>
+                <div id="profileActions" class="flex gap-2 mt-4 justify-center"></div>
             </div>
         </div>
-    </footer>
 
-    <script>
-        // --- 1. Firebase Config ---
-        const firebaseConfig = {
-  apiKey: "AIzaSyD1mn9MR9hyZ36Ce1lnGyJYmL6AHopScTA",
-  authDomain: "social-media-5e6c8.firebaseapp.com",
-  databaseURL: "https://social-media-5e6c8-default-rtdb.firebaseio.com/",
-  projectId: "social-media-5e6c8",
-  storageBucket: "social-media-5e6c8.firebasestorage.app",
-  messagingSenderId: "897473713729",
-  appId: "1:897473713729:web:7ba552ed4c1be8754418c0",
-  measurementId: "G-7JJTYPSX5P"
-};
-        firebase.initializeApp(firebaseConfig);
-        const auth = firebase.auth();
+        <div class="p-3">
+            <h3 id="feedTitle" class="font-bold text-lg text-[#050505] mb-3 border-b pb-2">Posts</h3>
+            <div id="myPostsContainer">
+                <div class="text-center py-20 text-gray-400"><i class="fas fa-spinner fa-spin"></i></div>
+            </div>
+        </div>
+    </div>
 
-        // --- 2. Login Redirect Logic ---
-        auth.onAuthStateChanged((user) => {
-            if (user) {
-                window.location.href = "account.html";
+<script>
+    const firebaseConfig = {
+        apiKey: "AIzaSyD1mn9MR9hyZ36Ce1lnGyJYmL6AHopScTA",
+        authDomain: "social-media-5e6c8.firebaseapp.com",
+        databaseURL: "https://social-media-5e6c8-default-rtdb.firebaseio.com/",
+        projectId: "social-media-5e6c8"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database(), auth = firebase.auth();
+
+    const blueBadge = `<svg class="inline-block w-[18px] h-[18px] ml-1 mb-1 text-[#1877F2]" viewBox="0 0 24 24" fill="currentColor"><path d="M9.707 19.121a.997.997 0 01-1.414 0l-5.646-5.647a1.5 1.5 0 010-2.121l.707-.707a1.5 1.5 0 012.121 0L9 14.167l8.528-8.527a1.5 1.5 0 012.122 0l.707.707a1.5 1.5 0 010 2.121l-9.944 9.944a1 1 0 01-.706.709z" /></svg>`;
+    const urlParams = new URLSearchParams(window.location.search);
+    let targetUid = urlParams.get('uid'), userCache = {}, openCommentSections = {}, myUid = "";
+    
+    let notificationQueue = [], isShowingNotif = false, currentNotifUser = "";
+
+    function timeAgo(ts) {
+        const s = Math.floor((new Date() - ts) / 1000);
+        return s < 60 ? "Just now" : s < 3600 ? Math.floor(s/60)+"m" : s < 86400 ? Math.floor(s/3600)+"h" : Math.floor(s/86400)+"d";
+    }
+
+    // 🚀 MODIFIED: Visit Chat page directly
+    function visitChat(uid) {
+        window.location.href = `chat.html?uid=${uid}`;
+    }
+
+    auth.onAuthStateChanged(user => {
+        if (user) {
+            myUid = user.uid;
+            const userStatusRef = db.ref(`status/${myUid}`);
+            userStatusRef.set({ state: 'online', last_changed: Date.now() });
+            userStatusRef.onDisconnect().set({ state: 'offline', last_changed: Date.now() });
+
+            if (!targetUid) targetUid = myUid;
+            loadProfile(targetUid, myUid);
+            loadFollowerCount(targetUid);
+            loadAllData(targetUid, myUid);
+            listenForNewMessages(); 
+        } else { window.location.href = "login.html"; }
+    });
+
+    // 🔔 Notification logic updated to use visitChat
+    function listenForNewMessages() {
+        db.ref('chats').on('child_added', snap => {
+            if (snap.key.includes(myUid)) {
+                db.ref(`chats/${snap.key}`).limitToLast(1).on('child_added', async mSnap => {
+                    const m = mSnap.val(), mId = mSnap.key;
+                    if (m.senderId !== myUid && !localStorage.getItem('shown_' + mId)) {
+                        notificationQueue.push({ ...m, id: mId, chatKey: snap.key });
+                        processNotifQueue();
+                    }
+                });
             }
         });
+    }
 
-        // --- 3. Dropdown Menu Toggle ---
-        const loginBtn = document.getElementById('loginBtn');
-        const dropdownMenu = document.getElementById('dropdownMenu');
+    async function processNotifQueue() {
+        if (isShowingNotif || notificationQueue.length === 0) return;
+        isShowingNotif = true;
+        const m = notificationQueue.shift();
+        localStorage.setItem('shown_' + m.id, 'true');
+        currentNotifUser = m.senderId;
+
+        const uSnap = await db.ref(`user-info/${m.senderId}/profile`).once('value');
+        const user = uSnap.val() || { fullName: "User" };
+
+        document.getElementById('notifImg').src = user.profilePic || 'https://ui-avatars.com/api/?name='+user.fullName;
+        document.getElementById('notifName').innerText = user.fullName;
+        document.getElementById('notifMsg').innerText = m.text;
         
-        loginBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            dropdownMenu.classList.toggle('hidden');
-        });
-
-        window.addEventListener('click', () => {
-            if (!dropdownMenu.classList.contains('hidden')) {
-                dropdownMenu.classList.add('hidden');
+        document.getElementById('quickSendBtn').onclick = () => {
+            const replyText = document.getElementById('quickReplyInput').value.trim();
+            if(replyText) {
+                db.ref(`chats/${m.chatKey}`).push({ senderId: myUid, text: replyText, timestamp: Date.now() });
+                dismissNotif();
             }
+        };
+        
+        document.getElementById('pushNotification').classList.add('show');
+        new Audio('https://raw.githubusercontent.com/Luanfv/messenger-notification-sound/master/messenger_notification.mp3').play().catch(()=>{});
+        setTimeout(() => { if (!document.getElementById('quickReplyBox').classList.contains('active')) dismissNotif(); }, 8000);
+    }
+
+    function activateReply() { document.getElementById('quickReplyBox').classList.add('active'); document.getElementById('quickReplyInput').focus(); }
+    function dismissNotif() { 
+        document.getElementById('pushNotification').classList.remove('show'); 
+        setTimeout(() => { 
+            document.getElementById('quickReplyBox').classList.remove('active'); 
+            document.getElementById('quickReplyInput').value = ""; 
+            isShowingNotif = false;
+            processNotifQueue();
+        }, 600); 
+    }
+    function openChatFromNotif() { visitChat(currentNotifUser); dismissNotif(); }
+
+    async function loadProfile(uid, myId) {
+        db.ref(`user-info/${uid}/profile`).on('value', snap => {
+            const data = snap.val();
+            if(!data) return;
+            document.getElementById('userName').innerHTML = (data.fullName || "User") + (data.isVerified ? blueBadge : "");
+            document.getElementById('userPic').src = data.profilePic || `https://ui-avatars.com/api/?name=${data.fullName}`;
+            document.getElementById('userBio').innerText = data.bio || "No bio available";
+            setupButtons(uid, myId);
         });
+    }
 
-        // --- 4. WhatsApp Redirect Logic ---
-        function redirectToWhatsApp() {
-            const phoneText = document.getElementById('phoneText').innerText;
-            const cleanNumber = phoneText.replace(/\D/g, ''); 
-            window.open(`https://wa.me/${cleanNumber}`, '_blank');
+    function setupButtons(uid, myId) {
+        const actions = document.getElementById('profileActions');
+        if (uid === myId) {
+            actions.innerHTML = `<button onclick="window.location.href='editprofile.html'" class="bg-[#e4e6eb] text-black px-10 py-2 rounded-lg font-bold text-sm">Edit Profile</button>`;
+        } else {
+            db.ref(`user-following/${myId}/${uid}`).on('value', snap => {
+                const isF = snap.exists();
+                actions.innerHTML = `
+                    <button onclick="toggleFollow('${uid}', ${isF})" class="px-6 py-2 rounded-lg font-bold text-sm ${isF ? 'bg-gray-200 text-black':'bg-[#1877F2] text-white'}">
+                        ${isF ? 'Following' : 'Follow'}
+                    </button>
+                    <button onclick="visitChat('${uid}')" class="bg-gray-200 text-black px-6 py-2 rounded-lg font-bold text-sm">Message</button>
+                    <button onclick="window.location.href='report.html?targetUid=${uid}'" class="bg-red-100 text-red-600 px-3 py-2 rounded-lg font-bold text-sm" title="Report User">
+                        <i class="fas fa-flag"></i>
+                    </button>`;
+            });
         }
-    </script>
+    }
 
+    async function toggleFollow(target, isF) {
+        const myId = auth.currentUser.uid;
+        if(isF) {
+            await db.ref(`user-following/${myId}/${target}`).remove();
+            await db.ref(`user-followers/${target}/${myId}`).remove();
+        } else {
+            await db.ref(`user-following/${myId}/${target}`).set(true);
+            await db.ref(`user-followers/${target}/${myId}`).set(true);
+        }
+    }
+
+    function loadAllData(uid, myId) {
+        db.ref('user-info').on('value', uSnap => {
+            uSnap.forEach(u => { userCache[u.key] = u.val().profile; });
+            db.ref('posts').on('value', pSnap => {
+                let posts = [];
+                pSnap.forEach(child => { if(child.val().uid === uid) posts.push({ id: child.key, ...child.val() }); });
+                renderPosts(posts.sort((a,b)=>b.timestamp-a.timestamp), uid === myId);
+            });
+        });
+    }
+
+    function renderPosts(posts, isMine) {
+        const container = document.getElementById('myPostsContainer');
+        if(posts.length === 0) {
+            container.innerHTML = `<div class="text-center py-10 text-gray-400">No posts yet.</div>`;
+            return;
+        }
+        container.innerHTML = posts.map(post => {
+            const isLiked = post.likedBy && post.likedBy[myUid];
+            const isBoxOpen = openCommentSections[post.id] ? '' : 'hidden';
+            return `
+            <div class="post-card">
+                <div class="p-3 flex justify-between items-center border-b mx-1">
+                    <div class="flex items-center gap-2">
+                        <img src="${post.userPhoto}" class="w-8 h-8 rounded-full border">
+                        <div>
+                            <p class="font-bold text-sm">${post.userName}</p>
+                            <p class="text-[10px] text-gray-400">${timeAgo(post.timestamp)}</p>
+                        </div>
+                    </div>
+                    ${isMine ? `<button onclick="deletePost('${post.id}')" class="text-gray-300 px-2"><i class="fas fa-trash"></i></button>` : ''}
+                </div>
+                <div class="${post.background && post.background !== 'none' ? 'colored-content' : 'px-4 py-3 text-[15px]'}" style="background: ${post.background || 'transparent'}">
+                    ${post.text}
+                </div>
+                <div class="px-4 py-2 flex justify-between text-gray-500 text-xs border-b mx-3">
+                    <span><i class="fas fa-thumbs-up text-blue-500"></i> ${post.likedBy ? Object.keys(post.likedBy).length : 0}</span>
+                    <span onclick="toggleComments('${post.id}')" class="cursor-pointer">${post.comments ? Object.keys(post.comments).length : 0} comments</span>
+                </div>
+                <div class="flex px-2 py-1">
+                    <button onclick="handleLike('${post.id}')" class="action-btn ${isLiked ? 'active-like' : ''}"><i class="${isLiked ? 'fas' : 'far'} fa-thumbs-up"></i> Like</button>
+                    <button onclick="toggleComments('${post.id}')" class="action-btn"><i class="far fa-comment"></i> Comment</button>
+                </div>
+                <div id="sec-${post.id}" class="${isBoxOpen} border-t bg-gray-50/50 p-2">
+                    <div class="space-y-3 mb-3 max-h-60 overflow-y-auto">${renderComments(post.comments)}</div>
+                    <div class="flex gap-2">
+                        <input type="text" id="in-${post.id}" placeholder="Write a comment..." class="flex-1 bg-white border rounded-full px-4 py-1.5 text-xs outline-none" onkeypress="if(event.key === 'Enter') postComment('${post.id}')">
+                        <button onclick="postComment('${post.id}')" class="text-blue-500 px-2"><i class="fas fa-paper-plane"></i></button>
+                    </div>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    function renderComments(comments) {
+        if(!comments) return '';
+        return Object.values(comments).sort((a,b)=>b.timestamp-a.timestamp).map(c => {
+            const p = userCache[c.uid] || {};
+            return `
+            <div class="flex gap-2">
+                <img src="${c.userPhoto || 'https://ui-avatars.com/api/?name='+c.userName}" 
+                     class="w-7 h-7 rounded-full cursor-pointer" 
+                     onclick="window.location.href='profile.html?uid=${c.uid}'">
+                <div class="comment-bubble">
+                    <p class="text-[10px] font-bold cursor-pointer hover:underline" 
+                       onclick="window.location.href='profile.html?uid=${c.uid}'">
+                        ${c.userName}${p.isVerified ? blueBadge : ""}
+                    </p>
+                    <p class="text-[12px] text-gray-800">${c.text}</p>
+                    <p class="text-[8px] text-gray-400 mt-1">${timeAgo(c.timestamp)}</p>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    async function handleLike(pid) { const ref = db.ref(`posts/${pid}/likedBy/${myUid}`); (await ref.get()).exists() ? await ref.remove() : await ref.set(true); }
+    async function postComment(pid) {
+        const inp = document.getElementById(`in-${pid}`);
+        if(!inp.value.trim()) return;
+        openCommentSections[pid] = true;
+        const myP = userCache[myUid];
+        await db.ref(`posts/${pid}/comments`).push({ uid: myUid, userName: myP.fullName, userPhoto: myP.profilePic, text: inp.value.trim(), timestamp: Date.now() });
+        inp.value = "";
+    }
+    function toggleComments(pid) { document.getElementById(`sec-${pid}`).classList.toggle('hidden'); openCommentSections[pid] = !document.getElementById(`sec-${pid}`).classList.contains('hidden'); }
+    async function deletePost(pid) { if((await Swal.fire({ text: 'Delete post?', icon: 'warning', showCancelButton: true })).isConfirmed) await db.ref(`posts/${pid}`).remove(); }
+    function loadFollowerCount(uid) { db.ref(`user-followers/${uid}`).on('value', snap => { document.getElementById('followerDisplay').innerText = `${snap.numChildren()} Followers`; }); }
+</script>
 </body>
 </html>
