@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Account Suspended - SocialTrade</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
+</head>
+<body class="bg-[#f9fafb] min-h-screen flex items-center justify-center p-6">
+
+    <div class="max-w-md w-full text-center">
+        <div class="relative inline-block mb-8">
+            <div class="absolute inset-0 bg-red-100 rounded-full animate-ping opacity-75"></div>
+            <div class="relative bg-white border-4 border-red-500 w-24 h-24 rounded-full flex items-center justify-center shadow-2xl">
+                <i class="fas fa-user-slash text-3xl text-red-600"></i>
+            </div>
+        </div>
+
+        <h1 class="text-3xl font-black text-gray-900 mb-2 tracking-tight uppercase">Access Denied</h1>
+        <p class="text-gray-500 font-medium mb-8 leading-relaxed">
+            Your account has been <span class="text-red-600 font-bold">Permanently Suspended</span> due to a violation of our community guidelines.
+        </p>
+
+        <div class="bg-white border border-gray-100 rounded-[2rem] p-6 shadow-xl shadow-gray-200/50 mb-8">
+            <div class="space-y-4 text-left">
+                <div class="flex justify-between items-center py-2 border-b border-gray-50">
+                    <span class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Status</span>
+                    <span class="px-3 py-1 bg-red-50 text-red-600 text-[10px] font-black rounded-full uppercase italic">Banned</span>
+                </div>
+                <div>
+                    <p class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Message</p>
+                    <p class="text-xs text-gray-500 bg-gray-50 p-4 rounded-2xl leading-relaxed">
+                        Access to this platform has been revoked. If you believe this is a mistake, please contact our support team.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex flex-col gap-4">
+            <a href="https://t.me/your_support" class="w-full bg-blue-600 text-white py-4 rounded-2xl font-black text-[11px] uppercase tracking-[0.2em] shadow-lg hover:bg-blue-700 transition flex items-center justify-center gap-2">
+                <i class="fab fa-telegram-plane"></i> Contact Support
+            </a>
+            
+            <button onclick="logoutAccount()" id="logoutBtn" class="w-full bg-black text-white py-4 rounded-2xl font-black text-[11px] uppercase tracking-[0.2em] shadow-lg hover:scale-[1.01] transition flex items-center justify-center gap-2">
+                <i class="fas fa-sign-out-alt"></i> Logout Account
+            </button>
+        </div>
+
+        <p class="mt-12 text-[9px] font-black text-gray-300 uppercase tracking-widest">
+            © 2026 SocialTrade Security
+        </p>
+    </div>
+
+    <script>
+        // --- Firebase Config (Same as your main app) ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyD1mn9MR9hyZ36Ce1lnGyJYmL6AHopScTA",
+            authDomain: "social-media-5e6c8.firebaseapp.com",
+            databaseURL: "https://social-media-5e6c8-default-rtdb.firebaseio.com/",
+            projectId: "social-media-5e6c8",
+            storageBucket: "social-media-5e6c8.firebasestorage.app",
+            messagingSenderId: "897473713729",
+            appId: "1:897473713729:web:7ba552ed4c1be8754418c0"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+
+        // Logout Function
+        function logoutAccount() {
+            const btn = document.getElementById('logoutBtn');
+            btn.innerHTML = '<i class="fas fa-spinner animate-spin"></i> Logging out...';
+            btn.disabled = true;
+
+            auth.signOut().then(() => {
+                // Logout shofol hole login page e redirect korbe
+                window.location.href = "login.html";
+            }).catch((error) => {
+                alert("Error logging out: " + error.message);
+                btn.innerHTML = '<i class="fas fa-sign-out-alt"></i> Logout Account';
+                btn.disabled = false;
+            });
+        }
+
+        // Browser back button disable logic
+        history.pushState(null, null, location.href);
+        window.onpopstate = function () {
+            history.go(1);
+        };
+    </script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+
+</body>
+</html>
