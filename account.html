@@ -111,69 +111,68 @@
 
     <script>
         // --- Firebase Logic ---
-        const firebaseConfig = {
-            apiKey: "AIzaSyD1mn9MR9hyZ36Ce1lnGyJYmL6AHopScTA",
-            authDomain: "social-media-5e6c8.firebaseapp.com",
-            databaseURL: "https://social-media-5e6c8-default-rtdb.firebaseio.com/",
-            projectId: "social-media-5e6c8",
-            storageBucket: "social-media-5e6c8.firebasestorage.app",
-            messagingSenderId: "897473713729",
-            appId: "1:897473713729:web:7ba552ed4c1be8754418c0"
-        };
+        // --- Firebase Configuration ---
+const firebaseConfig = {
+    apiKey: "AIzaSyD1mn9MR9hyZ36Ce1lnGyJYmL6AHopScTA",
+    authDomain: "social-media-5e6c8.firebaseapp.com",
+    databaseURL: "https://social-media-5e6c8-default-rtdb.firebaseio.com/",
+    projectId: "social-media-5e6c8",
+    storageBucket: "social-media-5e6c8.firebasestorage.app",
+    messagingSenderId: "897473713729",
+    appId: "1:897473713729:web:7ba552ed4c1be8754418c0"
+};
 
-        firebase.initializeApp(firebaseConfig);
-        const auth = firebase.auth();
-        const db = firebase.database();
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.database();
 
-        // ১. লগইন থাকা ইউজারের ডেটা লোড করা
-        auth.onAuthStateChanged((user) => {
-            if (user) {
-                // ডাটাবেস থেকে ইউজারের প্রোফাইল তথ্য আনা
-                db.ref('user-info/' + user.uid + '/profile').on('value', (snapshot) => {
-                    const data = snapshot.val();
-                    if (data) {
-                        document.getElementById('userNameDisplay').innerText = data.fullName;
-                        // যদি প্রোফাইল পিকচার থাকে তবে তা দেখাবে, নাহলে নাম দিয়ে জেনারেট করা অবতার দেখাবে
-                        const avatarUrl = data.profileImage || `https://ui-avatars.com/api/?name=${data.fullName}&background=random&color=fff`;
-                        document.getElementById('userAvatar').src = avatarUrl;
-                    }
-                });
-            } else {
-                // ইউজার লগইন না থাকলে লগইন পেজে পাঠিয়ে দেবে
-                window.location.href = "login.html";
+// ১. লগইন এবং ব্লক স্ট্যাটাস লাইভ চেক করা
+auth.onAuthStateChanged((user) => {
+    if (user) {
+        // .on('value') ব্যবহার করা হয়েছে যাতে মডারেটর প্যানেল থেকে ব্লক করলে সাথে সাথে কাজ করে
+        db.ref('user-info/' + user.uid).on('value', (snapshot) => {
+            const userData = snapshot.val();
+            
+            if (userData) {
+                // মডারেটর প্যানেলের 'confirmed' স্ট্যাটাস অনুযায়ী চেক
+                if (userData.profile?.isBlocked === true || userData.isBlocked === true) {
+                    window.location.href = "error.html";
+                    return;
+                }
+                
+                // ইউজার ব্লক না থাকলে প্রোফাইল ডেটা লোড করবে
+                if (userData.profile) {
+                    document.getElementById('userNameDisplay').innerText = userData.profile.fullName || "User";
+                    const avatarUrl = userData.profile.profileImage || `https://ui-avatars.com/api/?name=${userData.profile.fullName}&background=random&color=fff`;
+                    document.getElementById('userAvatar').src = avatarUrl;
+                }
             }
         });
+    } else {
+        // লগইন না থাকলে লগইন পেজে পাঠিয়ে দেবে
+        window.location.href = "login.html";
+    }
+});
 
-        // ২. সাইডবার কন্ট্রোল
-        const sidebar = document.getElementById('sidebar');
-        const overlay = document.getElementById('overlay');
-        const mobileToggle = document.getElementById('mobile-toggle');
+// ২. সাইডবার এবং অন্যান্য ফাংশন (আগের মতোই থাকবে)
+const sidebar = document.getElementById('sidebar');
+const overlay = document.getElementById('overlay');
+const mobileToggle = document.getElementById('mobile-toggle');
 
-        function toggleSidebar() {
-            sidebar.classList.toggle('closed');
-            sidebar.classList.toggle('open');
-            overlay.classList.toggle('hidden');
-        }
+function toggleSidebar() {
+    sidebar.classList.toggle('closed');
+    sidebar.classList.toggle('open');
+    overlay.classList.toggle('hidden');
+}
 
-        mobileToggle.addEventListener('click', toggleSidebar);
-        overlay.addEventListener('click', toggleSidebar);
+mobileToggle.addEventListener('click', toggleSidebar);
+overlay.addEventListener('click', toggleSidebar);
 
-        // ৩. নেভিগেশন লিংক অ্যাক্টিভ স্টেট
-        const links = document.querySelectorAll('.nav-link');
-        links.forEach(link => {
-            link.addEventListener('click', () => {
-                links.forEach(l => l.classList.remove('bg-blue-50', 'text-blue-600'));
-                link.classList.add('bg-blue-50', 'text-blue-600');
-                if (window.innerWidth < 1024) toggleSidebar();
-            });
-        });
-
-        // ৪. লগআউট ফাংশন
-        function logout() {
-            auth.signOut().then(() => {
-                window.location.href = "login.html";
-            });
-        }
+function logout() {
+    auth.signOut().then(() => {
+        window.location.href = "login.html";
+    });
+}
 
         // ৫. ডেক্সটপ চেকিং
         window.onload = () => {
