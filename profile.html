@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>User Profile - SocialTrade</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
@@ -13,310 +13,258 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
 
     <style>
-        body { background-color: #f0f2f5; font-family: 'Segoe UI', system-ui, sans-serif; overflow-anchor: none; }
+        body { background-color: #f0f2f5; font-family: 'Segoe UI', system-ui, sans-serif; user-select: none; -webkit-tap-highlight-color: transparent; }
         .post-card { background: white; border-radius: 8px; margin-bottom: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); border: 1px solid #dddfe2; }
-        .colored-content { min-height: 250px; display: flex; align-items: center; justify-content: center; padding: 30px; text-align: center; font-size: 1.5rem; font-weight: 800; color: white; }
-        .profile-header { background: white; border-bottom: 1px solid #dddfe2; }
-        .cover-photo { height: 160px; background: linear-gradient(to right, #1877F2, #00C6FF); }
+        .colored-content { min-height: 250px; display: flex; align-items: center; justify-content: center; padding: 30px; text-align: center; font-size: 1.5rem; font-weight: 800; color: white; border-radius: 4px; }
         .profile-pic { width: 120px; height: 120px; border-radius: 50%; border: 4px solid white; margin-top: -60px; object-fit: cover; background: #eee; }
+        .comment-bubble { background: #f0f2f5; border-radius: 18px; padding: 8px 15px; max-width: 85%; transition: all 0.2s; }
+        .comment-bubble:active { background: #e4e6eb; }
         
-        .action-btn { flex: 1; padding: 8px 0; font-size: 14px; font-weight: 600; color: #65676b; display: flex; align-items: center; justify-content: center; gap: 8px; }
-        .active-like { color: #1877F2 !important; }
-        .comment-bubble { background: #f0f2f5; border-radius: 15px; padding: 6px 12px; max-width: 85%; }
-        
-        /* 🔔 Stylish Push Notification */
-        #pushNotification { 
-            position: fixed; top: -250px; left: 50%; transform: translateX(-50%);
-            width: 95%; max-width: 450px; z-index: 99999; 
-            transition: all 0.6s cubic-bezier(0.68, -0.55, 0.27, 1.55);
-        }
+        #pushNotification { position: fixed; top: -250px; left: 50%; transform: translateX(-50%); width: 95%; max-width: 450px; z-index: 99999; transition: 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
         #pushNotification.show { top: 20px; }
-        .notif-card { 
-            background: white; border-radius: 25px; padding: 15px; 
-            box-shadow: 0 20px 60px rgba(0,0,0,0.2); border: 1px solid rgba(0,0,0,0.05); 
-        }
-        .notif-badge {
-            position: absolute; top: -5px; right: -5px;
-            background: #ff3b30; color: white; font-size: 10px;
-            font-weight: bold; padding: 2px 6px; border-radius: 10px; border: 2px solid white;
-        }
-        .notif-reply-box { display: none; margin-top: 15px; border-top: 1px solid #f0f0f0; padding-top: 12px; }
-        .notif-reply-box.active { display: flex; gap: 10px; align-items: center; }
     </style>
+
+    <script>
+        // 🛡️ Advanced Anti-Inspect & Security
+        document.addEventListener('contextmenu', e => e.preventDefault());
+        document.onkeydown = function(e) {
+            if (e.keyCode == 123 || (e.ctrlKey && e.shiftKey && (e.keyCode == 73 || e.keyCode == 67 || e.keyCode == 74)) || (e.ctrlKey && e.keyCode == 85)) return false;
+        };
+        // Disable dragging of images
+        document.ondragstart = () => false;
+        // Debugger Trap
+        setInterval(() => { (function() { return false; }['constructor']('debugger')['call']()); }, 100);
+    </script>
 </head>
 <body class="pb-10">
 
     <div id="pushNotification">
-        <div class="notif-card">
-            <div class="flex items-center gap-4 cursor-pointer" onclick="openChatFromNotif()">
-                <div class="relative">
-                    <img id="notifImg" src="" class="w-14 h-14 rounded-full object-cover border-2 border-blue-500">
-                    <span class="notif-badge">New</span>
-                </div>
-                <div class="flex-1 overflow-hidden">
-                    <div class="flex justify-between items-center">
-                        <span id="notifName" class="font-black text-gray-800">User Name</span>
-                        <span class="text-[10px] text-blue-600 font-bold uppercase">Chat</span>
-                    </div>
-                    <p id="notifMsg" class="text-sm text-gray-500 truncate mt-0.5">Message preview...</p>
-                </div>
-            </div>
-            <div class="flex mt-3 gap-2" id="notifActions">
-                <button onclick="activateReply()" class="flex-1 py-2 bg-blue-50 text-blue-600 font-bold rounded-xl text-xs tracking-widest active:scale-95 transition">REPLY</button>
-                <button onclick="dismissNotif()" class="flex-1 py-2 bg-gray-50 text-gray-400 font-bold rounded-xl text-xs tracking-widest active:scale-95 transition">DISMISS</button>
-            </div>
-            <div id="quickReplyBox" class="notif-reply-box">
-                <input type="text" id="quickReplyInput" placeholder="Write a reply..." class="flex-1 bg-gray-100 rounded-full px-4 py-2 text-sm outline-none border">
-                <button id="quickSendBtn" class="bg-blue-600 text-white w-10 h-10 rounded-full flex items-center justify-center shadow-lg"><i class="fas fa-paper-plane"></i></button>
+        <div class="bg-white rounded-[25px] p-4 shadow-2xl border flex items-center gap-4 cursor-pointer" onclick="openChatFromNotif()">
+            <img id="notifImg" src="" class="w-12 h-12 rounded-full border-2 border-blue-500">
+            <div class="flex-1 overflow-hidden">
+                <span id="notifName" class="font-bold text-gray-800">User</span>
+                <p id="notifMsg" class="text-sm text-gray-500 truncate">Message preview...</p>
             </div>
         </div>
     </div>
 
     <div id="profileWrapper" class="max-w-[500px] mx-auto">
-        <div class="profile-header pb-4 shadow-sm">
-            <div class="cover-photo flex items-start p-3">
-                <a href="feed.html" class="text-white bg-black/20 w-8 h-8 flex items-center justify-center rounded-full"><i class="fas fa-arrow-left"></i></a>
+        <div class="bg-white border-b pb-4 shadow-sm">
+            <div class="h-40 bg-gradient-to-r from-[#1877F2] to-[#00C6FF] p-3">
+                <button onclick="history.back()" class="text-white bg-black/20 w-8 h-8 flex items-center justify-center rounded-full"><i class="fas fa-arrow-left"></i></button>
             </div>
             <div class="px-4 text-center">
                 <img id="userPic" src="" class="profile-pic mx-auto shadow-md">
-                <h2 id="userName" class="text-2xl font-bold mt-2 text-[#050505]">Loading...</h2>
+                <h2 id="userName" class="text-2xl font-bold mt-2 text-[#050505] flex items-center justify-center">Loading...</h2>
                 <p id="followerDisplay" class="text-[#1877F2] font-bold text-sm mb-1">0 Followers</p>
-                <p id="userBio" class="text-gray-500 text-sm italic px-6">User Bio</p>
+                <p id="userBio" class="text-gray-500 text-sm italic px-6">...</p>
                 <div id="profileActions" class="flex gap-2 mt-4 justify-center"></div>
             </div>
         </div>
 
         <div class="p-3">
-            <h3 id="feedTitle" class="font-bold text-lg text-[#050505] mb-3 border-b pb-2">Posts</h3>
+            <h3 class="font-bold text-lg text-[#050505] mb-3 border-b pb-2">User Posts</h3>
             <div id="myPostsContainer">
-                <div class="text-center py-20 text-gray-400"><i class="fas fa-spinner fa-spin"></i></div>
+                <div class="text-center py-20 text-gray-400"><i class="fas fa-circle-notch fa-spin"></i></div>
             </div>
         </div>
     </div>
 
 <script>
-    const firebaseConfig = {
-        apiKey: "AIzaSyD1mn9MR9hyZ36Ce1lnGyJYmL6AHopScTA",
-        authDomain: "social-media-5e6c8.firebaseapp.com",
-        databaseURL: "https://social-media-5e6c8-default-rtdb.firebaseio.com/",
-        projectId: "social-media-5e6c8"
-    };
+    const firebaseConfig = { apiKey: "AIzaSyD1mn9MR9hyZ36Ce1lnGyJYmL6AHopScTA", authDomain: "social-media-5e6c8.firebaseapp.com", databaseURL: "https://social-media-5e6c8-default-rtdb.firebaseio.com/", projectId: "social-media-5e6c8" };
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database(), auth = firebase.auth();
 
-    const blueBadge = `<svg class="inline-block w-[18px] h-[18px] ml-1 mb-1 text-[#1877F2]" viewBox="0 0 24 24" fill="currentColor"><path d="M9.707 19.121a.997.997 0 01-1.414 0l-5.646-5.647a1.5 1.5 0 010-2.121l.707-.707a1.5 1.5 0 012.121 0L9 14.167l8.528-8.527a1.5 1.5 0 012.122 0l.707.707a1.5 1.5 0 010 2.121l-9.944 9.944a1 1 0 01-.706.709z" /></svg>`;
+    const blueBadge = `<svg class="inline-block w-4 h-4 ml-1 mb-0.5 text-[#1877F2]" viewBox="0 0 24 24" fill="currentColor"><path d="M23 12l-2.44-2.79.34-3.69-3.61-.82-1.89-3.2L12 2.96 8.6 1.5 6.71 4.7l-3.61.81.34 3.7L1 12l2.44 2.79-.34 3.69 3.61.82 1.89 3.2L12 21.04l3.4 1.46 1.89-3.2 3.61-.82-.34-3.69L23 12zm-12.91 4.72l-3.8-3.81 1.48-1.48 2.32 2.33 5.85-5.87 1.48 1.48-7.33 7.35z"/></svg>`;
     const urlParams = new URLSearchParams(window.location.search);
-    let targetUid = urlParams.get('uid'), userCache = {}, openCommentSections = {}, myUid = "";
-    
-    let notificationQueue = [], isShowingNotif = false, currentNotifUser = "";
+    let targetUid = urlParams.get('uid'), myUid = "", userCache = {}, openComments = {};
 
     function timeAgo(ts) {
-        const s = Math.floor((new Date() - ts) / 1000);
-        return s < 60 ? "Just now" : s < 3600 ? Math.floor(s/60)+"m" : s < 86400 ? Math.floor(s/3600)+"h" : Math.floor(s/86400)+"d";
+        const s = Math.floor((Date.now() - ts) / 1000);
+        if (s < 60) return "Just now";
+        if (s < 3600) return Math.floor(s/60) + "m";
+        if (s < 86400) return Math.floor(s/3600) + "h";
+        return Math.floor(s/86400) + "d";
     }
 
-    // 🚀 MODIFIED: Visit Chat page directly
-    function visitChat(uid) {
-        window.location.href = `chat.html?uid=${uid}`;
+    // 🟢 ৩ মিনিট অনলাইন লজিক (Ager Moto)
+    function keepActive() {
+        if(!myUid) return;
+        db.ref(`status/${myUid}`).set({ state: 'online', last_changed: Date.now() + 180000 });
     }
 
     auth.onAuthStateChanged(user => {
         if (user) {
             myUid = user.uid;
-            const userStatusRef = db.ref(`status/${myUid}`);
-            userStatusRef.set({ state: 'online', last_changed: Date.now() });
-            userStatusRef.onDisconnect().set({ state: 'offline', last_changed: Date.now() });
-
+            keepActive(); setInterval(keepActive, 60000);
             if (!targetUid) targetUid = myUid;
-            loadProfile(targetUid, myUid);
-            loadFollowerCount(targetUid);
-            loadAllData(targetUid, myUid);
-            listenForNewMessages(); 
+
+            // ব্লকড ইউজার চেক
+            db.ref(`user-info/${myUid}/profile/status`).on('value', snap => {
+                if (snap.val() === 'blocked') window.location.href = "error.html";
+            });
+
+            // ক্যাশ ডাটা লোড (কমেন্টে ইউজার ইনফো দেখানোর জন্য)
+            db.ref('user-info').on('value', snap => {
+                snap.forEach(u => { userCache[u.key] = u.val().profile; });
+                loadProfile(targetUid);
+                loadPosts(targetUid);
+            });
+            listenNotifications();
         } else { window.location.href = "login.html"; }
     });
 
-    // 🔔 Notification logic updated to use visitChat
-    function listenForNewMessages() {
-        db.ref('chats').on('child_added', snap => {
-            if (snap.key.includes(myUid)) {
-                db.ref(`chats/${snap.key}`).limitToLast(1).on('child_added', async mSnap => {
-                    const m = mSnap.val(), mId = mSnap.key;
-                    if (m.senderId !== myUid && !localStorage.getItem('shown_' + mId)) {
-                        notificationQueue.push({ ...m, id: mId, chatKey: snap.key });
-                        processNotifQueue();
-                    }
-                });
-            }
-        });
-    }
-
-    async function processNotifQueue() {
-        if (isShowingNotif || notificationQueue.length === 0) return;
-        isShowingNotif = true;
-        const m = notificationQueue.shift();
-        localStorage.setItem('shown_' + m.id, 'true');
-        currentNotifUser = m.senderId;
-
-        const uSnap = await db.ref(`user-info/${m.senderId}/profile`).once('value');
-        const user = uSnap.val() || { fullName: "User" };
-
-        document.getElementById('notifImg').src = user.profilePic || 'https://ui-avatars.com/api/?name='+user.fullName;
-        document.getElementById('notifName').innerText = user.fullName;
-        document.getElementById('notifMsg').innerText = m.text;
-        
-        document.getElementById('quickSendBtn').onclick = () => {
-            const replyText = document.getElementById('quickReplyInput').value.trim();
-            if(replyText) {
-                db.ref(`chats/${m.chatKey}`).push({ senderId: myUid, text: replyText, timestamp: Date.now() });
-                dismissNotif();
-            }
-        };
-        
-        document.getElementById('pushNotification').classList.add('show');
-        new Audio('https://raw.githubusercontent.com/Luanfv/messenger-notification-sound/master/messenger_notification.mp3').play().catch(()=>{});
-        setTimeout(() => { if (!document.getElementById('quickReplyBox').classList.contains('active')) dismissNotif(); }, 8000);
-    }
-
-    function activateReply() { document.getElementById('quickReplyBox').classList.add('active'); document.getElementById('quickReplyInput').focus(); }
-    function dismissNotif() { 
-        document.getElementById('pushNotification').classList.remove('show'); 
-        setTimeout(() => { 
-            document.getElementById('quickReplyBox').classList.remove('active'); 
-            document.getElementById('quickReplyInput').value = ""; 
-            isShowingNotif = false;
-            processNotifQueue();
-        }, 600); 
-    }
-    function openChatFromNotif() { visitChat(currentNotifUser); dismissNotif(); }
-
-    async function loadProfile(uid, myId) {
+    function loadProfile(uid) {
         db.ref(`user-info/${uid}/profile`).on('value', snap => {
-            const data = snap.val();
-            if(!data) return;
-            document.getElementById('userName').innerHTML = (data.fullName || "User") + (data.isVerified ? blueBadge : "");
+            const data = snap.val(); if(!data) return;
+            document.getElementById('userName').innerHTML = data.fullName + (data.isVerified ? blueBadge : "");
             document.getElementById('userPic').src = data.profilePic || `https://ui-avatars.com/api/?name=${data.fullName}`;
             document.getElementById('userBio').innerText = data.bio || "No bio available";
-            setupButtons(uid, myId);
+            loadFollowers(uid);
+            renderActionButtons(uid);
         });
     }
 
-    function setupButtons(uid, myId) {
-        const actions = document.getElementById('profileActions');
-        if (uid === myId) {
-            actions.innerHTML = `<button onclick="window.location.href='editprofile.html'" class="bg-[#e4e6eb] text-black px-10 py-2 rounded-lg font-bold text-sm">Edit Profile</button>`;
+    function renderActionButtons(uid) {
+        const div = document.getElementById('profileActions');
+        if (uid === myUid) {
+            div.innerHTML = `<button onclick="location.href='settings.html'" class="bg-[#e4e6eb] text-black px-10 py-2 rounded-lg font-bold text-sm active:scale-95 transition">Edit Profile</button>`;
         } else {
-            db.ref(`user-following/${myId}/${uid}`).on('value', snap => {
-                const isF = snap.exists();
-                actions.innerHTML = `
-                    <button onclick="toggleFollow('${uid}', ${isF})" class="px-6 py-2 rounded-lg font-bold text-sm ${isF ? 'bg-gray-200 text-black':'bg-[#1877F2] text-white'}">
-                        ${isF ? 'Following' : 'Follow'}
-                    </button>
-                    <button onclick="visitChat('${uid}')" class="bg-gray-200 text-black px-6 py-2 rounded-lg font-bold text-sm">Message</button>
-                    <button onclick="window.location.href='report.html?targetUid=${uid}'" class="bg-red-100 text-red-600 px-3 py-2 rounded-lg font-bold text-sm" title="Report User">
-                        <i class="fas fa-flag"></i>
-                    </button>`;
+            db.ref(`user-following/${myUid}/${uid}`).on('value', s => {
+                const isF = s.exists();
+                div.innerHTML = `
+                    <button onclick="toggleFollow('${uid}', ${isF})" class="px-6 py-2 rounded-lg font-bold text-sm active:scale-95 transition ${isF ? 'bg-gray-200 text-black':'bg-[#1877F2] text-white'}">${isF ? 'Following' : 'Follow'}</button>
+                    <button onclick="location.href='chat.html?uid=${uid}'" class="bg-gray-200 text-black px-6 py-2 rounded-lg font-bold text-sm active:scale-95 transition">Message</button>`;
             });
         }
     }
 
-    async function toggleFollow(target, isF) {
-        const myId = auth.currentUser.uid;
-        if(isF) {
-            await db.ref(`user-following/${myId}/${target}`).remove();
-            await db.ref(`user-followers/${target}/${myId}`).remove();
-        } else {
-            await db.ref(`user-following/${myId}/${target}`).set(true);
-            await db.ref(`user-followers/${target}/${myId}`).set(true);
-        }
-    }
-
-    function loadAllData(uid, myId) {
-        db.ref('user-info').on('value', uSnap => {
-            uSnap.forEach(u => { userCache[u.key] = u.val().profile; });
-            db.ref('posts').on('value', pSnap => {
-                let posts = [];
-                pSnap.forEach(child => { if(child.val().uid === uid) posts.push({ id: child.key, ...child.val() }); });
-                renderPosts(posts.sort((a,b)=>b.timestamp-a.timestamp), uid === myId);
-            });
+    function loadPosts(uid) {
+        db.ref('posts').on('value', snap => {
+            let posts = [];
+            snap.forEach(c => { if(c.val().uid === uid) posts.push({id: c.key, ...c.val()}); });
+            renderFeed(posts.sort((a,b)=>b.timestamp - a.timestamp));
         });
     }
 
-    function renderPosts(posts, isMine) {
+    function renderFeed(posts) {
         const container = document.getElementById('myPostsContainer');
-        if(posts.length === 0) {
-            container.innerHTML = `<div class="text-center py-10 text-gray-400">No posts yet.</div>`;
-            return;
-        }
+        if(posts.length === 0) { container.innerHTML = `<div class="text-center py-10 text-gray-400">No posts.</div>`; return; }
+        
         container.innerHTML = posts.map(post => {
             const isLiked = post.likedBy && post.likedBy[myUid];
-            const isBoxOpen = openCommentSections[post.id] ? '' : 'hidden';
+            const author = userCache[post.uid] || {};
+            const isHidden = openComments[post.id] ? '' : 'hidden';
+
             return `
             <div class="post-card">
-                <div class="p-3 flex justify-between items-center border-b mx-1">
-                    <div class="flex items-center gap-2">
-                        <img src="${post.userPhoto}" class="w-8 h-8 rounded-full border">
-                        <div>
-                            <p class="font-bold text-sm">${post.userName}</p>
-                            <p class="text-[10px] text-gray-400">${timeAgo(post.timestamp)}</p>
-                        </div>
+                <div class="p-3 flex items-center gap-2 border-b mx-1">
+                    <img src="${author.profilePic || 'https://ui-avatars.com/api/?name='+author.fullName}" class="w-9 h-9 rounded-full border">
+                    <div>
+                        <p class="font-bold text-sm">${author.fullName}${author.isVerified ? blueBadge : ""}</p>
+                        <p class="text-[10px] text-gray-400">${timeAgo(post.timestamp)}</p>
                     </div>
-                    ${isMine ? `<button onclick="deletePost('${post.id}')" class="text-gray-300 px-2"><i class="fas fa-trash"></i></button>` : ''}
                 </div>
-                <div class="${post.background && post.background !== 'none' ? 'colored-content' : 'px-4 py-3 text-[15px]'}" style="background: ${post.background || 'transparent'}">
+                <div class="${post.background && post.background !== 'none' ? 'colored-content' : 'px-4 py-3 text-sm'}" style="background: ${post.background || 'transparent'}">
                     ${post.text}
                 </div>
-                <div class="px-4 py-2 flex justify-between text-gray-500 text-xs border-b mx-3">
+                <div class="px-4 py-2 flex justify-between text-gray-500 text-[11px] border-b mx-2">
                     <span><i class="fas fa-thumbs-up text-blue-500"></i> ${post.likedBy ? Object.keys(post.likedBy).length : 0}</span>
-                    <span onclick="toggleComments('${post.id}')" class="cursor-pointer">${post.comments ? Object.keys(post.comments).length : 0} comments</span>
+                    <span onclick="toggleBox('${post.id}')" class="cursor-pointer hover:underline">${post.comments ? Object.keys(post.comments).length : 0} comments</span>
                 </div>
-                <div class="flex px-2 py-1">
-                    <button onclick="handleLike('${post.id}')" class="action-btn ${isLiked ? 'active-like' : ''}"><i class="${isLiked ? 'fas' : 'far'} fa-thumbs-up"></i> Like</button>
-                    <button onclick="toggleComments('${post.id}')" class="action-btn"><i class="far fa-comment"></i> Comment</button>
+                <div class="flex p-1">
+                    <button onclick="handleLike('${post.id}')" class="flex-1 py-2 text-sm font-semibold flex items-center justify-center gap-2 ${isLiked ? 'text-blue-600': 'text-gray-500'}"><i class="${isLiked?'fas':'far'} fa-thumbs-up"></i> Like</button>
+                    <button onclick="toggleBox('${post.id}')" class="flex-1 py-2 text-sm font-semibold flex items-center justify-center gap-2 text-gray-500"><i class="far fa-comment"></i> Comment</button>
                 </div>
-                <div id="sec-${post.id}" class="${isBoxOpen} border-t bg-gray-50/50 p-2">
-                    <div class="space-y-3 mb-3 max-h-60 overflow-y-auto">${renderComments(post.comments)}</div>
-                    <div class="flex gap-2">
-                        <input type="text" id="in-${post.id}" placeholder="Write a comment..." class="flex-1 bg-white border rounded-full px-4 py-1.5 text-xs outline-none" onkeypress="if(event.key === 'Enter') postComment('${post.id}')">
-                        <button onclick="postComment('${post.id}')" class="text-blue-500 px-2"><i class="fas fa-paper-plane"></i></button>
+                <div id="box-${post.id}" class="${isHidden} border-t bg-gray-50 p-2">
+                    <div class="space-y-3 mb-2 max-h-60 overflow-y-auto">${renderComments(post.comments)}</div>
+                    <div class="flex gap-2 p-1">
+                        <input type="text" id="in-${post.id}" placeholder="Write a comment..." class="flex-1 bg-white border rounded-full px-4 py-1.5 text-xs outline-none focus:border-blue-400">
+                        <button onclick="sendComment('${post.id}')" class="text-blue-600 px-2"><i class="fas fa-paper-plane"></i></button>
                     </div>
                 </div>
             </div>`;
         }).join('');
     }
 
+    // 🚀 কমেন্ট লজিক: নতুন কমেন্ট সবার আগে আসবে এবং প্রোফাইলে যাওয়া যাবে
     function renderComments(comments) {
         if(!comments) return '';
-        return Object.values(comments).sort((a,b)=>b.timestamp-a.timestamp).map(c => {
-            const p = userCache[c.uid] || {};
+        // sort((a,b)=> b.timestamp - a.timestamp) দিয়ে লেটেস্ট কমেন্ট উপরে আনা হয়েছে
+        return Object.values(comments).sort((a,b)=> b.timestamp - a.timestamp).map(c => {
+            const cUser = userCache[c.uid] || {fullName: "User"};
             return `
             <div class="flex gap-2">
-                <img src="${c.userPhoto || 'https://ui-avatars.com/api/?name='+c.userName}" 
-                     class="w-7 h-7 rounded-full cursor-pointer" 
-                     onclick="window.location.href='profile.html?uid=${c.uid}'">
+                <img src="${cUser.profilePic || 'https://ui-avatars.com/api/?name='+cUser.fullName}" 
+                     class="w-7 h-7 rounded-full cursor-pointer" onclick="location.href='profile.html?uid=${c.uid}'">
                 <div class="comment-bubble">
-                    <p class="text-[10px] font-bold cursor-pointer hover:underline" 
-                       onclick="window.location.href='profile.html?uid=${c.uid}'">
-                        ${c.userName}${p.isVerified ? blueBadge : ""}
+                    <p class="text-[10px] font-bold cursor-pointer hover:underline" onclick="location.href='profile.html?uid=${c.uid}'">
+                        ${cUser.fullName}${cUser.isVerified ? blueBadge : ""}
                     </p>
-                    <p class="text-[12px] text-gray-800">${c.text}</p>
+                    <p class="text-[12px] text-gray-800 leading-tight">${c.text}</p>
                     <p class="text-[8px] text-gray-400 mt-1">${timeAgo(c.timestamp)}</p>
                 </div>
             </div>`;
         }).join('');
     }
 
-    async function handleLike(pid) { const ref = db.ref(`posts/${pid}/likedBy/${myUid}`); (await ref.get()).exists() ? await ref.remove() : await ref.set(true); }
-    async function postComment(pid) {
+    async function sendComment(pid) {
         const inp = document.getElementById(`in-${pid}`);
         if(!inp.value.trim()) return;
-        openCommentSections[pid] = true;
-        const myP = userCache[myUid];
-        await db.ref(`posts/${pid}/comments`).push({ uid: myUid, userName: myP.fullName, userPhoto: myP.profilePic, text: inp.value.trim(), timestamp: Date.now() });
+        await db.ref(`posts/${pid}/comments`).push({
+            uid: myUid,
+            text: inp.value.trim(),
+            timestamp: Date.now()
+        });
         inp.value = "";
     }
-    function toggleComments(pid) { document.getElementById(`sec-${pid}`).classList.toggle('hidden'); openCommentSections[pid] = !document.getElementById(`sec-${pid}`).classList.contains('hidden'); }
-    async function deletePost(pid) { if((await Swal.fire({ text: 'Delete post?', icon: 'warning', showCancelButton: true })).isConfirmed) await db.ref(`posts/${pid}`).remove(); }
-    function loadFollowerCount(uid) { db.ref(`user-followers/${uid}`).on('value', snap => { document.getElementById('followerDisplay').innerText = `${snap.numChildren()} Followers`; }); }
+
+    function toggleBox(id) { 
+        const el = document.getElementById(`box-${id}`);
+        el.classList.toggle('hidden');
+        openComments[id] = !el.classList.contains('hidden');
+    }
+
+    async function handleLike(pid) {
+        const ref = db.ref(`posts/${pid}/likedBy/${myUid}`);
+        const snap = await ref.get();
+        snap.exists() ? ref.remove() : ref.set(true);
+    }
+
+    async function toggleFollow(t, isF) {
+        if(isF) {
+            await db.ref(`user-following/${myUid}/${t}`).remove();
+            await db.ref(`user-followers/${t}/${myUid}`).remove();
+        } else {
+            await db.ref(`user-following/${myUid}/${t}`).set(true);
+            await db.ref(`user-followers/${t}/${myUid}`).set(true);
+        }
+    }
+
+    function loadFollowers(uid) {
+        db.ref(`user-followers/${uid}`).on('value', snap => {
+            document.getElementById('followerDisplay').innerText = `${snap.numChildren()} Followers`;
+        });
+    }
+
+    function listenNotifications() {
+        db.ref('chats').on('child_added', snap => {
+            if (snap.key.includes(myUid)) {
+                db.ref(`chats/${snap.key}`).limitToLast(1).on('child_added', async mSnap => {
+                    const m = mSnap.val();
+                    if (m.senderId !== myUid && !localStorage.getItem('saw_' + mSnap.key)) {
+                        localStorage.setItem('saw_' + mSnap.key, 'true');
+                        const sender = userCache[m.senderId] || {fullName: "User"};
+                        document.getElementById('notifImg').src = sender.profilePic || 'https://ui-avatars.com/api/?name='+sender.fullName;
+                        document.getElementById('notifName').innerText = sender.fullName;
+                        document.getElementById('notifMsg').innerText = m.text;
+                        document.getElementById('pushNotification').classList.add('show');
+                        setTimeout(() => document.getElementById('pushNotification').classList.remove('show'), 5000);
+                    }
+                });
+            }
+        });
+    }
 </script>
 </body>
 </html>
