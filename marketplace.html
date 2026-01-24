@@ -19,11 +19,6 @@
         .premium-card { background: white; border-radius: 2rem; border: 1px solid rgba(0,0,0,0.03); box-shadow: 0 10px 25px -5px rgba(0,0,0,0.02); }
         .nav-active { color: #2563eb !important; background: #eff6ff; border-radius: 1.2rem; }
     </style>
-    <script>
-        // 🛡️ Anti-Inspect Logic
-        document.addEventListener('contextmenu', e => e.preventDefault());
-        document.onkeydown = e => { if (e.keyCode == 123 || (e.ctrlKey && e.shiftKey && [73, 67, 74].includes(e.keyCode)) || (e.ctrlKey && e.keyCode == 85)) return false; };
-    </script>
 </head>
 <body class="pb-32">
 
@@ -76,20 +71,9 @@
 
         let currentUser = null;
 
-        // 🟢 ৩ মিনিট একটিভ লজিক
-        function keepActive() {
-            if(!currentUser) return;
-            db.ref(`status/${currentUser.uid}`).set({
-                state: 'online',
-                last_changed: Date.now() + 180000 // ৩ মিনিট বাফার
-            });
-        }
-
         auth.onAuthStateChanged(user => { 
             if(user) { 
                 currentUser = user; 
-                keepActive();
-                setInterval(keepActive, 60000); // প্রতি মিনিটে আপডেট
                 init(); 
             } else {
                 window.location.href = "login.html";
@@ -97,12 +81,13 @@
         });
 
         async function init() {
-            // Block & Balance Check
             db.ref(`user-info/${currentUser.uid}`).on('value', s => {
                 const data = s.val();
                 if(!data) return;
+                
                 if(data.isBlocked) {
-                    document.body.innerHTML = `<div class='h-screen flex items-center justify-center bg-red-600 text-white font-black p-10 text-center uppercase'>Account Blocked! Violation Detected.</div>`;
+                    document.body.innerHTML = `<div class='h-screen flex items-center justify-center bg-red-600 text-white font-black p-10 text-center uppercase'>Account Blocked! Please contact admin to unblock.</div>`;
+                    return;
                 }
                 document.getElementById('userBalance').innerText = (data.balance || 0).toFixed(2);
             });
@@ -114,10 +99,11 @@
             db.ref('market-items').on('value', snap => {
                 const container = document.getElementById('marketContainer');
                 container.innerHTML = "";
-                if(!snap.val()) return;
+                const data = snap.val();
+                if(!data) return;
 
-                Object.keys(snap.val()).reverse().forEach(id => {
-                    const gig = snap.val()[id];
+                Object.keys(data).reverse().forEach(id => {
+                    const gig = data[id];
                     if(gig.isHidden || gig.publisherId === currentUser.uid) return;
 
                     let itemsHtml = "";
@@ -189,19 +175,25 @@
                 const notifBox = document.getElementById('notifContainer');
                 const msgBox = document.getElementById('msgContainer');
                 notifBox.innerHTML = ""; msgBox.innerHTML = "";
-                if(!snap.val()) return;
+                const val = snap.val();
+                if(!val) return;
 
-                Object.keys(snap.val()).forEach(id => {
-                    const o = snap.val()[id];
-                    if(o.status === 'completed' || o.status === 'rejected') return;
+                Object.keys(val).forEach(id => {
+                    const o = val[id];
+                    
+                    // 🛡️ FIX: Ignore if already processed
+                    if(o.status === 'completed' || o.status === 'rejected' || o.status === 'expired') return;
 
-                    // Penalty (Block) Logic
+                    // 🛡️ FIX: Penalty Logic with Status Update to 'expired'
                     if(Date.now() > o.deadline) {
                         const guilty = (o.status === 'pending') ? o.sellerId : o.buyerId;
+                        // ১. ইউজারকে ব্লক করো
                         db.ref(`user-info/${guilty}`).update({ isBlocked: true });
+                        // ২. অর্ডার 'expired' করো যাতে এটি বারবার লুপে না পড়ে
+                        db.ref(`orders/${id}`).update({ status: 'expired' });
+                        return; 
                     }
 
-                    // For Owner (Pending Requests)
                     if(o.sellerId === currentUser.uid && o.status === 'pending') {
                         notifBox.innerHTML += `
                             <div class="premium-card p-6 border-l-4 border-rose-500">
@@ -218,7 +210,6 @@
                             </div>`;
                     }
 
-                    // For User (Inbox)
                     if(o.buyerId === currentUser.uid && o.status === 'approved_by_owner') {
                         msgBox.innerHTML += `
                             <div class="premium-card p-6 bg-blue-50/30">
@@ -249,13 +240,11 @@
         async function finalComplete(id, amount, sellerId, type) {
             const myBalSnap = await db.ref(`user-info/${currentUser.uid}/balance`).get();
             const selBalSnap = await db.ref(`user-info/${sellerId}/balance`).get();
-
             if(type === 'Seller') {
                 await db.ref(`user-info/${sellerId}/balance`).set((selBalSnap.val() || 0) + amount);
             } else {
                 await db.ref(`user-info/${currentUser.uid}/balance`).set((myBalSnap.val() || 0) + amount);
             }
-
             await db.ref(`orders/${id}`).update({ status: 'completed' });
             Swal.fire('Completed!', 'Balance shifted successfully.', 'success');
         }
