@@ -10,7 +10,8 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
     <style>
-        /* 🔔 Stylish Push Notification CSS */
+        body { user-select: none; -webkit-tap-highlight-color: transparent; }
+        /* 🔔 Push Notification CSS */
         #pushNotification { 
             position: fixed; top: -250px; left: 50%; transform: translateX(-50%);
             width: 95%; max-width: 450px; z-index: 99999; 
@@ -24,15 +25,22 @@
         .notif-badge {
             position: absolute; top: -5px; right: -5px;
             background: #ff3b30; color: white; font-size: 10px;
-            font-weight: bold; padding: 2px 6px; border-radius: 10px;
-            border: 2px solid white;
+            font-weight: bold; padding: 2px 6px; border-radius: 10px; border: 2px solid white;
         }
         .notif-reply-box { display: none; margin-top: 15px; border-top: 1px solid #f0f0f0; padding-top: 12px; }
         .notif-reply-box.active { display: flex; gap: 10px; align-items: center; }
         
         #messages::-webkit-scrollbar { width: 4px; }
         #messages::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+        .verified-badge { width: 14px; height: 14px; margin-left: 3px; display: inline-block; vertical-align: middle; }
     </style>
+    <script>
+        // 🛡️ Advanced Security Logic (Inspect Block)
+        document.addEventListener('contextmenu', e => e.preventDefault());
+        document.onkeydown = function(e) {
+            if (e.keyCode == 123 || (e.ctrlKey && e.shiftKey && (e.keyCode == 'I'.charCodeAt(0) || e.keyCode == 'C'.charCodeAt(0) || e.keyCode == 'J'.charCodeAt(0))) || (e.ctrlKey && e.keyCode == 'U'.charCodeAt(0))) return false;
+        };
+    </script>
 </head>
 <body class="max-w-[500px] mx-auto h-screen flex flex-col bg-white">
 
@@ -52,11 +60,11 @@
                 </div>
             </div>
             <div class="flex mt-3 gap-2">
-                <button onclick="activateReply()" class="flex-1 py-2 bg-blue-50 text-blue-600 font-bold rounded-xl text-xs tracking-widest active:scale-95 transition">REPLY</button>
-                <button onclick="dismissNotif()" class="flex-1 py-2 bg-gray-50 text-gray-400 font-bold rounded-xl text-xs tracking-widest active:scale-95 transition">DISMISS</button>
+                <button onclick="activateReply()" class="flex-1 py-2 bg-blue-50 text-blue-600 font-bold rounded-xl text-xs tracking-widest transition">REPLY</button>
+                <button onclick="dismissNotif()" class="flex-1 py-2 bg-gray-50 text-gray-400 font-bold rounded-xl text-xs tracking-widest transition">DISMISS</button>
             </div>
             <div id="quickReplyBox" class="notif-reply-box">
-                <input type="text" id="quickReplyInput" placeholder="Write a reply..." class="flex-1 bg-gray-100 rounded-full px-4 py-2 text-sm outline-none border focus:border-blue-400">
+                <input type="text" id="quickReplyInput" placeholder="Write a reply..." class="flex-1 bg-gray-100 rounded-full px-4 py-2 text-sm outline-none border">
                 <button id="quickSendBtn" class="bg-blue-600 text-white w-10 h-10 rounded-full flex items-center justify-center shadow-lg"><i class="fas fa-paper-plane"></i></button>
             </div>
         </div>
@@ -66,7 +74,7 @@
         <i class="fas fa-arrow-left text-blue-500 text-lg cursor-pointer" onclick="window.history.back()"></i>
         <img id="headPic" class="w-10 h-10 rounded-full object-cover border">
         <div class="flex-1">
-            <h2 id="headName" class="font-bold text-sm text-gray-800">Loading...</h2>
+            <h2 id="headName" class="font-bold text-sm text-gray-800 flex items-center">Loading...</h2>
             <div id="headStatus" class="text-[10px] flex items-center gap-1 text-gray-400">
                 <span id="statusDot" class="w-2 h-2 rounded-full bg-gray-300"></span>
                 <span id="statusText">Checking...</span>
@@ -86,37 +94,59 @@
     <script>
         const firebaseConfig = { apiKey: "AIzaSyD1mn9MR9hyZ36Ce1lnGyJYmL6AHopScTA", authDomain: "social-media-5e6c8.firebaseapp.com", databaseURL: "https://social-media-5e6c8-default-rtdb.firebaseio.com/", projectId: "social-media-5e6c8" };
         firebase.initializeApp(firebaseConfig);
-        const db = firebase.database();
-        const auth = firebase.auth();
+        const db = firebase.database(), auth = firebase.auth();
         const urlParams = new URLSearchParams(window.location.search);
         const receiverId = urlParams.get('uid');
-        let myUid = "", chatKey = "";
+        let myUid = "", chatKey = "", notificationQueue = [], isShowingNotif = false;
 
-        // 🔔 Queue Variables
-        let notificationQueue = [], isShowingNotif = false;
+        const blueBadge = `<svg class="verified-badge" viewBox="0 0 24 24" fill="#1877F2" xmlns="http://www.w3.org/2000/svg"><path d="M23.389 10.519L20.897 7.741L21.242 4.025L17.591 3.201L15.681 0L12 1.583L8.319 0L6.409 3.201L2.758 4.015L3.103 7.741L0.611 10.519L2.758 13.297L2.413 17.023L6.064 17.847L7.974 21.048L11.655 19.465L15.336 21.048L17.246 17.847L20.897 17.023L20.552 13.297L22.699 10.519H23.389ZM10.526 15.111L6.776 11.361L8.243 9.894L10.526 12.177L15.757 6.946L17.224 8.413L10.526 15.111Z"/></svg>`;
 
         auth.onAuthStateChanged(user => {
             if (user && receiverId) {
                 myUid = user.uid;
                 chatKey = myUid < receiverId ? myUid + "_" + receiverId : receiverId + "_" + myUid;
-                
-                db.ref(`status/${myUid}`).set({ state: 'online', last: Date.now() });
-                db.ref(`status/${myUid}`).onDisconnect().set({ state: 'offline', last: Date.now() });
-
+                checkMyBlockStatus();
+                updateMyStatus(true);
                 loadHeader();
                 loadMessages();
-                listenForOtherMessages();
+                listenForNotifications();
+                // 🔄 Refresh status every 1 min while on page
+                setInterval(() => updateMyStatus(true), 60000);
             } else { window.location.href = "sms-list.html"; }
         });
 
+        function checkMyBlockStatus() {
+            db.ref(`user-info/${myUid}/profile`).on('value', s => {
+                if(s.val()?.status === 'blocked') window.location.href = "error.html";
+            });
+        }
+
+        function updateMyStatus(online) {
+            const statusRef = db.ref(`status/${myUid}`);
+            if (online) {
+                statusRef.set({ state: 'online', last: Date.now() + 180000 });
+            } else {
+                statusRef.update({ last: Date.now() + 180000 });
+            }
+        }
+
+        // 🟢 Persistent Active Logic (3 min) on close/background
+        window.addEventListener('visibilitychange', () => {
+            updateMyStatus(document.visibilityState === 'visible');
+        });
+
         async function loadHeader() {
+            // Profile & Blue Badge logic
             db.ref(`user-info/${receiverId}/profile`).on('value', s => {
                 const u = s.val() || {};
-                document.getElementById('headName').innerText = u.fullName || "User";
+                document.getElementById('headName').innerHTML = (u.fullName || "User") + (u.isVerified ? blueBadge : '');
                 document.getElementById('headPic').src = u.profilePic || 'https://ui-avatars.com/api/?name='+u.fullName;
             });
+
+            // 🟢 Dynamic Active Status (Reload-free)
             db.ref(`status/${receiverId}`).on('value', s => {
-                const isOnline = s.val()?.state === 'online';
+                const data = s.val();
+                const isOnline = data && (data.state === 'online' || Date.now() < data.last);
                 document.getElementById('statusText').innerText = isOnline ? "Active now" : "Offline";
                 document.getElementById('statusDot').className = `w-2 h-2 rounded-full ${isOnline ? 'bg-green-500' : 'bg-gray-300'}`;
                 document.getElementById('headStatus').className = `text-[10px] flex items-center gap-1 ${isOnline ? 'text-green-500 font-bold' : 'text-gray-400'}`;
@@ -127,7 +157,7 @@
             db.ref(`chats/${chatKey}`).on('value', snap => {
                 const msgs = snap.val() || {};
                 document.getElementById('messages').innerHTML = Object.values(msgs).map(m => `
-                    <div class="flex ${m.senderId === myUid ? 'justify-end' : 'justify-start'}">
+                    <div class="flex ${m.senderId === myUid ? 'justify-end' : 'justify-start'} animate-fade-in">
                         <div class="max-w-[75%] px-4 py-2 rounded-2xl text-sm shadow-sm ${m.senderId === myUid ? 'bg-blue-500 text-white rounded-tr-none' : 'bg-white text-gray-800 border rounded-tl-none'}">
                             ${m.text}
                         </div>
@@ -143,77 +173,54 @@
             if(!txt) return;
             db.ref(`chats/${chatKey}`).push({ senderId: myUid, text: txt, timestamp: Date.now() });
             input.value = "";
+            updateMyStatus(true); // Sending msg keeps you active
         }
 
-        // 🔔 --- Persistent logic for Chat Page ---
-        function listenForOtherMessages() {
+        // 🔔 Notification System
+        function listenForNotifications() {
             db.ref('chats').on('child_added', snap => {
-                // আপনার বর্তমান চ্যাট উইন্ডো বাদে অন্য কোথাও মেসেজ আসলে
                 if (snap.key.includes(myUid) && snap.key !== chatKey) {
-                    db.ref(`chats/${snap.key}`).limitToLast(5).on('child_added', async mSnap => {
+                    db.ref(`chats/${snap.key}`).limitToLast(1).on('child_added', async mSnap => {
                         const m = mSnap.val();
-                        const mId = mSnap.key;
-
-                        // যদি আগে কখনো দেখানো না হয় (localStorage check)
-                        if (m.senderId !== myUid && !localStorage.getItem('shown_' + mId)) {
-                            notificationQueue.push({ ...m, id: mId, chatKey: snap.key });
-                            processQueue();
+                        if (m.senderId !== myUid && !localStorage.getItem('notif_' + mSnap.key)) {
+                            notificationQueue.push({ ...m, id: mSnap.key, chatKey: snap.key });
+                            showNextNotif();
                         }
                     });
                 }
             });
         }
 
-        async function processQueue() {
+        async function showNextNotif() {
             if (isShowingNotif || notificationQueue.length === 0) return;
             isShowingNotif = true;
             const m = notificationQueue.shift();
-
-            // মার্ক করুন যেন আর না আসে
-            localStorage.setItem('shown_' + m.id, 'true');
+            localStorage.setItem('notif_' + m.id, 'true');
 
             const uSnap = await db.ref(`user-info/${m.senderId}/profile`).once('value');
-            const user = uSnap.val() || { fullName: "User" };
-
-            document.getElementById('notifImg').src = user.profilePic || 'https://ui-avatars.com/api/?name='+user.fullName;
-            document.getElementById('notifName').innerText = user.fullName;
-            document.getElementById('notifMsg').innerText = m.text;
+            const user = uSnap.val() || {};
             
-            // পপআপ ক্লিক করলে ওই চ্যাটে যাবে
-            document.getElementById('notifLink').onclick = () => {
-                window.location.href = `chat.html?uid=${m.senderId}`;
-            };
-
-            // কুইক রিপ্লাই সেন্ড
-            document.getElementById('quickSendBtn').onclick = () => {
-                const replyText = document.getElementById('quickReplyInput').value.trim();
-                if(replyText) {
-                    db.ref(`chats/${m.chatKey}`).push({ senderId: myUid, text: replyText, timestamp: Date.now() });
-                    dismissNotif();
-                }
-            };
-
+            document.getElementById('notifImg').src = user.profilePic || 'https://ui-avatars.com/api/?name=User';
+            document.getElementById('notifName').innerText = user.fullName || "User";
+            document.getElementById('notifMsg').innerText = m.text;
             document.getElementById('pushNotification').classList.add('show');
-            new Audio('https://raw.githubusercontent.com/Luanfv/messenger-notification-sound/master/messenger_notification.mp3').play().catch(()=>{});
+            
+            document.getElementById('notifLink').onclick = () => { window.location.href = `chat.html?uid=${m.senderId}`; };
+            document.getElementById('quickSendBtn').onclick = () => {
+                const r = document.getElementById('quickReplyInput').value.trim();
+                if(r) { db.ref(`chats/${m.chatKey}`).push({ senderId: myUid, text: r, timestamp: Date.now() }); dismissNotif(); }
+            };
 
-            // ৮ সেকেন্ড পর অটো হাইড (যদি রিপ্লাই বক্স ওপেন না থাকে)
-            setTimeout(() => {
-                if (!document.getElementById('quickReplyBox').classList.contains('active')) dismissNotif();
-            }, 8000);
+            setTimeout(() => { if (!document.getElementById('quickReplyBox').classList.contains('active')) dismissNotif(); }, 7000);
         }
 
-        function activateReply() { 
-            document.getElementById('quickReplyBox').classList.add('active'); 
-            document.getElementById('quickReplyInput').focus(); 
-        }
-
+        function activateReply() { document.getElementById('quickReplyBox').classList.add('active'); document.getElementById('quickReplyInput').focus(); }
         function dismissNotif() { 
             document.getElementById('pushNotification').classList.remove('show'); 
             setTimeout(() => { 
                 document.getElementById('quickReplyBox').classList.remove('active'); 
                 document.getElementById('quickReplyInput').value = ""; 
-                isShowingNotif = false;
-                processQueue(); // পরের নোটিফিকেশন থাকলে শো করো
+                isShowingNotif = false; showNextNotif(); 
             }, 600); 
         }
     </script>
