@@ -11,87 +11,48 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
 
     <style>
-        body { background-color: #f7f8fa; font-family: 'Segoe UI', sans-serif; overflow: hidden; margin: 0; }
-        
-        /* 📱 Full Screen Popup iframe */
-        #chatPopup {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: white; z-index: 10000;
-            transform: translateY(100%); transition: transform 0.4s cubic-bezier(0.1, 0.7, 0.1, 1);
-        }
+        body { background-color: #f7f8fa; font-family: 'Segoe UI', sans-serif; overflow: hidden; margin: 0; user-select: none; }
+        #chatPopup { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: white; z-index: 10000; transform: translateY(100%); transition: transform 0.4s cubic-bezier(0.1, 0.7, 0.1, 1); }
         #chatPopup.show { transform: translateY(0); }
         iframe { width: 100%; height: 100%; border: none; }
-
-        /* 🔔 Stylish Push Notification */
-        #pushNotification { 
-            position: fixed; top: -250px; left: 50%; transform: translateX(-50%);
-            width: 95%; max-width: 450px; z-index: 99999; 
-            transition: all 0.6s cubic-bezier(0.68, -0.55, 0.27, 1.55);
-        }
+        .verified-badge { width: 14px; height: 14px; margin-left: 3px; display: inline-block; vertical-align: middle; }
+        #pushNotification { position: fixed; top: -250px; left: 50%; transform: translateX(-50%); width: 95%; max-width: 450px; z-index: 99999; transition: all 0.6s cubic-bezier(0.68, -0.55, 0.27, 1.55); }
         #pushNotification.show { top: 20px; }
-        .notif-card { 
-            background: white; border-radius: 25px; padding: 15px; 
-            box-shadow: 0 20px 60px rgba(0,0,0,0.2); border: 1px solid rgba(0,0,0,0.05); 
-        }
-
-        .notif-badge {
-            position: absolute; top: -5px; right: -5px;
-            background: #ff3b30; color: white; font-size: 10px;
-            font-weight: bold; padding: 2px 6px; border-radius: 10px;
-            border: 2px solid white;
-        }
-
+        .notif-card { background: white; border-radius: 25px; padding: 15px; box-shadow: 0 20px 60px rgba(0,0,0,0.2); border: 1px solid rgba(0,0,0,0.05); }
+        .online-dot { width: 14px; height: 14px; background-color: #31a24c; border: 2px solid white; border-radius: 50%; position: absolute; bottom: 2px; right: 2px; }
         .notif-reply-box { display: none; margin-top: 15px; border-top: 1px solid #f0f0f0; padding-top: 12px; }
         .notif-reply-box.active { display: flex; gap: 10px; align-items: center; }
-
-        .online-dot { 
-            width: 14px; height: 14px; background-color: #31a24c; 
-            border: 2px solid white; border-radius: 50%; 
-            position: absolute; bottom: 2px; right: 2px;
-        }
-
-        .delete-overlay {
-            position: fixed; inset: 0; background: rgba(0,0,0,0.5); 
-            display: none; justify-content: center; align-items: center; z-index: 10005;
-            backdrop-filter: blur(2px);
-        }
     </style>
+
+    <script>
+        // 🛡️ Advanced Anti-Inspect Security
+        document.addEventListener('contextmenu', e => e.preventDefault());
+        document.onkeydown = function(e) {
+            if (e.keyCode == 123 || (e.ctrlKey && e.shiftKey && (e.keyCode == 'I'.charCodeAt(0) || e.keyCode == 'C'.charCodeAt(0) || e.keyCode == 'J'.charCodeAt(0))) || (e.ctrlKey && e.keyCode == 'U'.charCodeAt(0))) return false;
+        };
+    </script>
 </head>
 <body class="max-w-[500px] mx-auto h-screen bg-white relative">
 
-    <div id="chatPopup">
-        <iframe id="chatIframe" src=""></iframe>
-    </div>
-
-    <div id="deleteOverlay" class="delete-overlay">
-        <div class="bg-white p-6 rounded-3xl w-80 text-center shadow-2xl">
-            <h3 class="font-bold text-lg">Delete Chat?</h3>
-            <p class="text-gray-400 text-sm mt-2 mb-6">Are you sure you want to delete this?</p>
-            <div class="flex gap-3">
-                <button onclick="hideDelete()" class="flex-1 py-3 bg-gray-100 rounded-2xl font-bold">Cancel</button>
-                <button id="confirmDelBtn" class="flex-1 py-3 bg-red-500 text-white rounded-2xl font-bold">Delete</button>
-            </div>
-        </div>
-    </div>
+    <div id="chatPopup"><iframe id="chatIframe" src=""></iframe></div>
 
     <div id="pushNotification">
         <div class="notif-card">
             <div class="flex items-center gap-4 cursor-pointer" onclick="openChatFromNotif()">
                 <div class="relative">
                     <img id="notifImg" src="" class="w-14 h-14 rounded-full object-cover border-2 border-blue-500">
-                    <span class="notif-badge">New</span>
                 </div>
                 <div class="flex-1 overflow-hidden">
                     <div class="flex justify-between items-center">
-                        <span id="notifName" class="font-black text-gray-800">User Name</span>
+                        <span id="notifName" class="font-black text-gray-800">User</span>
                         <span class="text-[10px] text-blue-600 font-bold uppercase">Notification</span>
                     </div>
                     <p id="notifMsg" class="text-sm text-gray-500 truncate mt-0.5">Message preview...</p>
                 </div>
             </div>
-            <div class="flex mt-3 gap-2" id="notifActions">
-                <button onclick="activateReply()" class="flex-1 py-2 bg-blue-50 text-blue-600 font-bold rounded-xl text-xs tracking-widest active:scale-95 transition">REPLY</button>
-                <button onclick="dismissNotif()" class="flex-1 py-2 bg-gray-50 text-gray-400 font-bold rounded-xl text-xs tracking-widest active:scale-95 transition">DISMISS</button>
+            <div class="flex mt-3 gap-2">
+                <button onclick="activateReply()" class="flex-1 py-2 bg-blue-50 text-blue-600 font-bold rounded-xl text-xs tracking-widest transition">REPLY</button>
+                <button onclick="dismissNotif()" class="flex-1 py-2 bg-gray-50 text-gray-400 font-bold rounded-xl text-xs tracking-widest transition">DISMISS</button>
             </div>
             <div id="quickReplyBox" class="notif-reply-box">
                 <input type="text" id="quickReplyInput" placeholder="Write a reply..." class="flex-1 bg-gray-100 rounded-full px-4 py-2 text-sm outline-none border">
@@ -111,58 +72,61 @@
                 <i class="fas fa-camera text-gray-400 text-xl cursor-pointer"></i>
             </div>
         </div>
-        
         <div id="chat-list" class="flex-1 overflow-y-auto pb-20">
-            <div class="p-10 text-center text-gray-300">Loading your messages...</div>
+            <div class="p-10 text-center text-gray-300">Loading chats...</div>
         </div>
     </div>
 
     <script>
         const firebaseConfig = { apiKey: "AIzaSyD1mn9MR9hyZ36Ce1lnGyJYmL6AHopScTA", authDomain: "social-media-5e6c8.firebaseapp.com", databaseURL: "https://social-media-5e6c8-default-rtdb.firebaseio.com/", projectId: "social-media-5e6c8" };
         firebase.initializeApp(firebaseConfig);
-        const db = firebase.database();
-        const auth = firebase.auth();
-        let myUid = "", allChats = [], currentNotifUser = "", holdTimer;
+        const db = firebase.database(), auth = firebase.auth();
+        let myUid = "", allChats = [], currentNotifUser = "", notificationQueue = [], isShowingNotif = false;
         
-        // 🔔 Notification Queue Variables
-        let notificationQueue = [], isShowingNotif = false;
+        const blueBadge = `<svg class="verified-badge" viewBox="0 0 24 24" fill="#1877F2" xmlns="http://www.w3.org/2000/svg"><path d="M23.389 10.519L20.897 7.741L21.242 4.025L17.591 3.201L15.681 0L12 1.583L8.319 0L6.409 3.201L2.758 4.015L3.103 7.741L0.611 10.519L2.758 13.297L2.413 17.023L6.064 17.847L7.974 21.048L11.655 19.465L15.336 21.048L17.246 17.847L20.897 17.023L20.552 13.297L22.699 10.519H23.389ZM10.526 15.111L6.776 11.361L8.243 9.894L10.526 12.177L15.757 6.946L17.224 8.413L10.526 15.111Z"/></svg>`;
 
         auth.onAuthStateChanged(user => {
             if (user) {
                 myUid = user.uid;
-                db.ref(`status/${myUid}`).set({ state: 'online', last: Date.now() });
-                db.ref(`status/${myUid}`).onDisconnect().set({ state: 'offline', last: Date.now() });
-                loadInbox();
-                listenForNewMessages(); // 👈 Updated Logic here
+                checkUserStatus(myUid);
             } else { window.location.href = "login.html"; }
         });
 
-        function openChat(uid) {
-            document.getElementById('chatIframe').src = `chat.html?uid=${uid}`;
-            document.getElementById('chatPopup').classList.add('show');
-            window.history.pushState({popup: true}, ""); 
-        }
+        function checkUserStatus(uid) {
+            db.ref(`user-info/${uid}/profile`).on('value', snap => {
+                const profile = snap.val();
+                if (profile && profile.status === 'blocked') { window.location.href = "error.html"; return; }
+                
+                // 🟢 Online persistence set to 5 minutes (300,000 ms)
+                const statusRef = db.ref(`status/${uid}`);
+                statusRef.set({ state: 'online', last: Date.now() });
 
-        window.onpopstate = function() {
-            const popup = document.getElementById('chatPopup');
-            if (popup.classList.contains('show')) {
-                popup.classList.remove('show');
-                setTimeout(() => { document.getElementById('chatIframe').src = ""; }, 400);
-            }
-        };
+                window.addEventListener('beforeunload', () => {
+                    statusRef.onDisconnect().cancel(); 
+                    // Update last active time to 5 mins in future on exit
+                    statusRef.update({ last: Date.now() + 300000 }); 
+                });
+
+                loadInbox();
+                listenForNewMessages();
+            });
+        }
 
         function loadInbox() {
             db.ref('chats').on('value', async snap => {
-                const chats = snap.val() || {};
-                const list = [];
+                const chats = snap.val() || {}, list = [];
                 for (let key in chats) {
                     if (key.includes(myUid)) {
                         const otherId = key.replace(myUid, "").replace("_", "");
-                        const msgs = Object.values(chats[key]);
-                        const last = msgs[msgs.length - 1];
+                        const msgs = Object.values(chats[key]), last = msgs[msgs.length - 1];
                         const uS = await db.ref(`user-info/${otherId}/profile`).once('value');
                         const sS = await db.ref(`status/${otherId}`).once('value');
-                        list.push({ id: otherId, key: key, name: uS.val()?.fullName || "User", photo: uS.val()?.profilePic, msg: last.text, time: last.timestamp, online: sS.val()?.state === 'online' });
+                        
+                        // Check if online or active within last 5 minutes
+                        const status = sS.val();
+                        const isRecentlyActive = status && (status.state === 'online' || (Date.now() < status.last));
+
+                        list.push({ id: otherId, key: key, name: uS.val()?.fullName || "User", photo: uS.val()?.profilePic, isVerified: uS.val()?.isVerified, msg: last.text, time: last.timestamp, online: isRecentlyActive });
                     }
                 }
                 allChats = list.sort((a,b) => b.time - a.time);
@@ -172,40 +136,29 @@
 
         function renderChats(data) {
             document.getElementById('chat-list').innerHTML = data.map(i => `
-                <div onmousedown="startHold('${i.key}')" onmouseup="stopHold()" ontouchstart="startHold('${i.key}')" ontouchend="stopHold()" 
-                     onclick="openChat('${i.id}')" class="flex items-center gap-4 p-4 active:bg-gray-100 transition cursor-pointer">
+                <div onclick="openChat('${i.id}')" class="flex items-center gap-4 p-4 active:bg-gray-100 transition cursor-pointer">
                     <div class="relative">
                         <img src="${i.photo || 'https://ui-avatars.com/api/?name='+i.name}" class="w-14 h-14 rounded-full object-cover border">
                         ${i.online ? '<div class="online-dot"></div>' : ''}
                     </div>
                     <div class="flex-1 overflow-hidden">
-                        <div class="flex justify-between items-center"><h3 class="font-bold text-gray-800">${i.name}</h3><span class="text-[10px] text-gray-400">${new Date(i.time).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span></div>
+                        <div class="flex justify-between items-center"><h3 class="font-bold text-gray-800 flex items-center">${i.name}${i.isVerified ? blueBadge : ''}</h3><span class="text-[10px] text-gray-400">${new Date(i.time).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span></div>
                         <p class="text-sm text-gray-500 truncate">${i.msg}</p>
                     </div>
                 </div>`).join('');
         }
 
-        function startHold(key) { holdTimer = setTimeout(() => { document.getElementById('deleteOverlay').style.display = 'flex'; document.getElementById('confirmDelBtn').onclick = () => { db.ref(`chats/${key}`).remove(); hideDelete(); }; }, 800); }
-        function stopHold() { clearTimeout(holdTimer); }
-        function hideDelete() { document.getElementById('deleteOverlay').style.display = 'none'; }
-        function filterChats() {
-            const val = document.getElementById('searchInput').value.toLowerCase();
-            const filtered = allChats.filter(c => c.name.toLowerCase().includes(val));
-            renderChats(filtered);
-        }
+        function openChat(uid) { document.getElementById('chatIframe').src = `chat.html?uid=${uid}`; document.getElementById('chatPopup').classList.add('show'); window.history.pushState({popup: true}, ""); }
+        window.onpopstate = () => { document.getElementById('chatPopup').classList.remove('show'); };
+        function filterChats() { const val = document.getElementById('searchInput').value.toLowerCase(); renderChats(allChats.filter(c => c.name.toLowerCase().includes(val))); }
 
-        // 🔔 --- Persistent Logic for Inbox Page ---
         function listenForNewMessages() {
             db.ref('chats').on('child_added', snap => {
                 if (snap.key.includes(myUid)) {
-                    // গত ৫টি মেসেজ পর্যন্ত ব্যাকলগ চেক করবে
-                    db.ref(`chats/${snap.key}`).limitToLast(5).on('child_added', async mSnap => {
+                    db.ref(`chats/${snap.key}`).limitToLast(1).on('child_added', async mSnap => {
                         const m = mSnap.val();
-                        const mId = mSnap.key;
-
-                        // যদি আগে কখনো এই ডিভাইসে না দেখানো হয়ে থাকে
-                        if (m.senderId !== myUid && !localStorage.getItem('shown_' + mId)) {
-                            notificationQueue.push({ ...m, id: mId, chatKey: snap.key });
+                        if (m.senderId !== myUid && !localStorage.getItem('shown_' + mSnap.key)) {
+                            notificationQueue.push({ ...m, id: mSnap.key, chatKey: snap.key });
                             processNotifQueue();
                         }
                     });
@@ -215,49 +168,19 @@
 
         async function processNotifQueue() {
             if (isShowingNotif || notificationQueue.length === 0) return;
-            isShowingNotif = true;
-            const m = notificationQueue.shift();
-            
-            // শো হওয়ার সাথে সাথে মার্ক করে রাখা
-            localStorage.setItem('shown_' + m.id, 'true');
-            currentNotifUser = m.senderId;
-
+            isShowingNotif = true; const m = notificationQueue.shift();
+            localStorage.setItem('shown_' + m.id, 'true'); currentNotifUser = m.senderId;
             const uSnap = await db.ref(`user-info/${m.senderId}/profile`).once('value');
             const user = uSnap.val() || { fullName: "User" };
-
             document.getElementById('notifImg').src = user.profilePic || 'https://ui-avatars.com/api/?name='+user.fullName;
             document.getElementById('notifName').innerText = user.fullName;
             document.getElementById('notifMsg').innerText = m.text;
-            
-            document.getElementById('quickSendBtn').onclick = () => {
-                const replyText = document.getElementById('quickReplyInput').value.trim();
-                if(replyText) {
-                    db.ref(`chats/${m.chatKey}`).push({ senderId: myUid, text: replyText, timestamp: Date.now() });
-                    dismissNotif();
-                }
-            };
-            
             document.getElementById('pushNotification').classList.add('show');
-            new Audio('https://raw.githubusercontent.com/Luanfv/messenger-notification-sound/master/messenger_notification.mp3').play().catch(()=>{});
-
-            setTimeout(() => {
-                if (!document.getElementById('quickReplyBox').classList.contains('active')) dismissNotif();
-            }, 8000);
+            setTimeout(() => { if (!document.getElementById('quickReplyBox').classList.contains('active')) dismissNotif(); }, 8000);
         }
-
-        function activateReply() { document.getElementById('quickReplyBox').classList.add('active'); document.getElementById('quickReplyInput').focus(); }
-        
-        function dismissNotif() { 
-            document.getElementById('pushNotification').classList.remove('show'); 
-            setTimeout(() => { 
-                document.getElementById('quickReplyBox').classList.remove('active'); 
-                document.getElementById('quickReplyInput').value = ""; 
-                isShowingNotif = false;
-                processNotifQueue(); // কিউ থেকে পরেরটা আনো
-            }, 600); 
-        }
-
+        function dismissNotif() { document.getElementById('pushNotification').classList.remove('show'); setTimeout(() => { isShowingNotif = false; processNotifQueue(); }, 600); }
         function openChatFromNotif() { openChat(currentNotifUser); dismissNotif(); }
+        function activateReply() { document.getElementById('quickReplyBox').classList.add('active'); document.getElementById('quickReplyInput').focus(); }
     </script>
 </body>
 </html>
