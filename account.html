@@ -164,6 +164,14 @@ function toggleSidebar() {
     sidebar.classList.toggle('open');
     overlay.classList.toggle('hidden');
 }
+// সাইডবারের সব লিঙ্কে ক্লিক করলে সাইডবার বন্ধ হবে (শুধুমাত্র মোবাইল ভিউতে)
+document.querySelectorAll('.nav-link').forEach(link => {
+    link.addEventListener('click', () => {
+        if (window.innerWidth < 1024) { // যদি মোবাইল বা ট্যাবলেট হয়
+            toggleSidebar();
+        }
+    });
+});
 
 mobileToggle.addEventListener('click', toggleSidebar);
 overlay.addEventListener('click', toggleSidebar);
