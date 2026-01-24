@@ -26,7 +26,7 @@
     </style>
 
     <script>
-        // 🛡️ Security
+        // 🛡️ All Security Logic Restored
         document.addEventListener('contextmenu', e => e.preventDefault());
         document.onkeydown = function(e) {
             if (e.keyCode == 123 || (e.ctrlKey && e.shiftKey && (e.keyCode == 'I'.charCodeAt(0) || e.keyCode == 'C'.charCodeAt(0) || e.keyCode == 'J'.charCodeAt(0))) || (e.ctrlKey && e.keyCode == 'U'.charCodeAt(0))) return false;
@@ -73,9 +73,14 @@
                 <i class="fas fa-search text-gray-400 mr-2"></i>
                 <input type="text" id="searchInput" oninput="filterChats()" placeholder="Search people..." class="bg-transparent outline-none text-sm w-full">
             </div>
-            <h1 class="text-3xl font-black text-gray-800 tracking-tighter">Chats</h1>
+            <div class="flex justify-between items-center">
+                <h1 class="text-3xl font-black text-gray-800 tracking-tighter">Chats</h1>
+                <i class="fas fa-camera text-gray-400 text-xl cursor-pointer"></i>
+            </div>
         </div>
-        <div id="chat-list" class="flex-1 overflow-y-auto pb-20"></div>
+        <div id="chat-list" class="flex-1 overflow-y-auto pb-20">
+            <div class="p-10 text-center text-gray-300">Syncing messages...</div>
+        </div>
     </div>
 
     <script>
@@ -86,58 +91,63 @@
 
         const blueBadge = `<svg class="verified-badge" viewBox="0 0 24 24" fill="#1877F2" xmlns="http://www.w3.org/2000/svg"><path d="M23.389 10.519L20.897 7.741L21.242 4.025L17.591 3.201L15.681 0L12 1.583L8.319 0L6.409 3.201L2.758 4.015L3.103 7.741L0.611 10.519L2.758 13.297L2.413 17.023L6.064 17.847L7.974 21.048L11.655 19.465L15.336 21.048L17.246 17.847L20.897 17.023L20.552 13.297L22.699 10.519H23.389ZM10.526 15.111L6.776 11.361L8.243 9.894L10.526 12.177L15.757 6.946L17.224 8.413L10.526 15.111Z"/></svg>`;
 
+        // 🔄 Real-time Status Sync
+        function updateStatus(isOnline) {
+            if (!myUid) return;
+            const statusRef = db.ref(`status/${myUid}`);
+            if (isOnline) {
+                // পেজে থাকাকালীন ফিউচার টাইমস্ট্যাম্প পুশ করতে থাকবে
+                statusRef.set({ state: 'online', last: Date.now() + 180000 });
+            } else {
+                // বের হয়ে গেলে ৩ মিনিট পর্যন্ত গ্রিন ডট রাখার জন্য টাইমস্ট্যাম্প সেট হবে
+                statusRef.update({ state: 'offline', last: Date.now() + 180000 });
+            }
+        }
+
         auth.onAuthStateChanged(user => {
             if (user) {
                 myUid = user.uid;
-                updateMyStatus('online');
+                updateStatus(true); // প্রবেশ করার সাথে সাথে একটিভ
+                setInterval(() => updateStatus(true), 60000); // প্রতি ১ মিনিটে স্ট্যাটাস রিনিউ করবে
                 loadInbox();
                 listenForNewMessages();
             } else { window.location.href = "login.html"; }
         });
 
-        // 🟢 তাৎক্ষণিক অনলাইন এবং ৩ মিনিট লজিক
-        function updateMyStatus(state) {
-            const statusRef = db.ref(`status/${myUid}`);
-            if (state === 'online') {
-                statusRef.set({ state: 'online', last: Date.now() + 180000 }); // ৩ মিনিট বোনাস
-            }
-        }
-
-        // রিয়েল-টাইমে আপডেট রাখার জন্য ইন্টারভ্যাল
-        setInterval(() => { if (myUid) updateMyStatus('online'); }, 30000);
-
-        // অ্যাপ থেকে বের হলে ৩ মিনিট গ্রিন ডট রাখার লজিক
+        // বের হয়ে গেলে বা অ্যাপ ব্যাকগ্রাউন্ডে গেলে ৩ মিনিট একটিভ রাখবে
         window.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'hidden') {
-                db.ref(`status/${myUid}`).update({ state: 'offline', last: Date.now() + 180000 });
-            } else {
-                updateMyStatus('online');
-            }
+            if (document.visibilityState === 'hidden') updateStatus(false);
+            else updateStatus(true);
         });
 
         function loadInbox() {
-            // .on('value') ব্যবহার করা হয়েছে যাতে রিলোড ছাড়া অন্যের স্ট্যাটাস পরিবর্তন হলে সাথে সাথে দেখা যায়
+            // .on('value') ব্যবহার করা হয়েছে যাতে রিলোড ছাড়াই ডাটাবেসের চেঞ্জ স্ক্রিনে আসে
             db.ref('chats').on('value', async snap => {
                 const chats = snap.val() || {}, list = [];
                 const keys = Object.keys(chats).filter(k => k.includes(myUid));
                 
-                for (let key of keys) {
+                // Promise.all ব্যবহার করা হয়েছে যাতে দ্রুত লোড হয়
+                const chatPromises = keys.map(async key => {
                     const otherId = key.replace(myUid, "").replace("_", "");
                     const msgs = Object.values(chats[key]), last = msgs[msgs.length - 1];
                     
-                    const uSnap = await db.ref(`user-info/${otherId}/profile`).once('value');
-                    const sSnap = await db.ref(`status/${otherId}`).once('value');
+                    const [uSnap, sSnap] = await Promise.all([
+                        db.ref(`user-info/${otherId}/profile`).once('value'),
+                        db.ref(`status/${otherId}`).once('value')
+                    ]);
                     
                     const status = sSnap.val();
                     const isOnline = status && (status.state === 'online' || Date.now() < status.last);
 
-                    list.push({ 
+                    return { 
                         id: otherId, key: key, name: uSnap.val()?.fullName || "User", 
                         photo: uSnap.val()?.profilePic, isVerified: uSnap.val()?.isVerified, 
                         msg: last.text, time: last.timestamp, online: isOnline 
-                    });
-                }
-                allChats = list.sort((a,b) => b.time - a.time);
+                    };
+                });
+
+                const results = await Promise.all(chatPromises);
+                allChats = results.sort((a,b) => b.time - a.time);
                 renderChats(allChats);
             });
         }
@@ -157,6 +167,7 @@
                 </div>`).join('');
         }
 
+        // --- All Other Original Logic (Delete, Popup, Notification) ---
         function openChat(uid) { document.getElementById('chatIframe').src = `chat.html?uid=${uid}`; document.getElementById('chatPopup').classList.add('show'); window.history.pushState({popup: true}, ""); }
         window.onpopstate = () => { document.getElementById('chatPopup').classList.remove('show'); };
         
@@ -164,7 +175,6 @@
         function stopHold() { clearTimeout(holdTimer); }
         function hideDelete() { document.getElementById('deleteOverlay').style.display = 'none'; }
 
-        // --- 🔔 Notification logic (Real-time) ---
         function listenForNewMessages() {
             db.ref('chats').on('child_added', snap => {
                 if (snap.key.includes(myUid)) {
