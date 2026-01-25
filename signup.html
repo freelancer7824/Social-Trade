@@ -5,10 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sign Up - SocialTrade</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+    <style>
+        body { user-select: none; -webkit-tap-highlight-color: transparent; }
+    </style>
+    <script>
+        // 🛡️ Security: Disable Inspect Element & Right Click
+        document.addEventListener('contextmenu', e => e.preventDefault());
+        document.onkeydown = e => {
+            if (e.keyCode == 123 || (e.ctrlKey && e.shiftKey && [73, 74, 67].includes(e.keyCode)) || (e.ctrlKey && e.keyCode == 85)) return false;
+        };
+    </script>
 </head>
 <body class="bg-gray-50 flex items-center justify-center min-h-screen p-4">
 
@@ -24,7 +34,7 @@
             <input type="text" id="fullName" placeholder="Full Name" required class="w-full px-4 py-3 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-blue-500">
             
             <div class="flex gap-4">
-                <input type="number" id="age" placeholder="Age" required class="w-1/2 px-4 py-3 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-blue-500">
+                <input type="number" id="age" placeholder="Age (Min 18)" required class="w-1/2 px-4 py-3 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-blue-500">
                 <select id="userType" required class="w-1/2 px-4 py-3 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-blue-500 bg-white">
                     <option value="" disabled selected>User type</option>
                     <option value="Buyer">Buyer</option>
@@ -51,14 +61,13 @@
                 <input type="file" id="profileImage" accept="image/*" class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
             </div>
 
-            <button type="submit" id="signupBtn" class="w-full py-4 bg-blue-600 text-white font-bold rounded-2xl shadow-lg hover:bg-blue-700 transition">
+            <button type="submit" id="signupBtn" class="w-full py-4 bg-blue-600 text-white font-bold rounded-2xl shadow-lg hover:bg-blue-700 transition active:scale-95">
                 Sign Up Now
             </button>
         </form>
     </div>
 
     <script>
-        // --- Configuration ---
         const firebaseConfig = {
             apiKey: "AIzaSyD1mn9MR9hyZ36Ce1lnGyJYmL6AHopScTA",
             authDomain: "social-media-5e6c8.firebaseapp.com",
@@ -69,7 +78,6 @@
             appId: "1:897473713729:web:7ba552ed4c1be8754418c0"
         };
 
-        // Cloudinary Details (Change these to your own)
         const CLOUDINARY_URL = "https://api.cloudinary.com/v1_1/dhvtgzy5x/image/upload";
         const CLOUDINARY_UPLOAD_PRESET = "Rosenews";
 
@@ -78,35 +86,48 @@
         const db = firebase.database();
 
         function generateHardwareID() {
-            const navigator_info = window.navigator;
-            const screen_info = window.screen;
-            let uid = navigator_info.mimeTypes.length;
-            uid += navigator_info.userAgent.replace(/\D+/g, '');
-            uid += navigator_info.plugins.length;
-            uid += screen_info.height || '';
-            uid += screen_info.width || '';
-            uid += screen_info.pixelDepth || '';
-            return "DEV-" + uid;
+            return "DEV-" + (navigator.userAgent.replace(/\D+/g, '') + screen.width + screen.height);
         }
 
         async function uploadToCloudinary(file) {
             const formData = new FormData();
             formData.append('file', file);
             formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
-
-            const response = await fetch(CLOUDINARY_URL, {
-                method: 'POST',
-                body: formData
-            });
-            const data = await response.json();
+            const res = await fetch(CLOUDINARY_URL, { method: 'POST', body: formData });
+            const data = await res.json();
             return data.secure_url;
         }
 
         document.getElementById('signupForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const signupBtn = document.getElementById('signupBtn');
-            const imageFile = document.getElementById('profileImage').files[0];
-            
+            const fullName = document.getElementById('fullName').value.trim();
+            const age = parseInt(document.getElementById('age').value);
+            const password = document.getElementById('password').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+
+            // ❌ STRICT NAME VALIDATION (Reserved Words)
+            const normalizedName = fullName.toLowerCase().replace(/\s+/g, '');
+            if (normalizedName.includes("socialtrade")) {
+                Swal.fire("Error", "The name 'Social Trade' is reserved.", "error");
+                return;
+            }
+            if (!/^[a-zA-Z\s]+$/.test(fullName)) {
+                Swal.fire("Error", "Name can only contain English letters.", "error");
+                return;
+            }
+
+            // ❌ AGE VALIDATION
+            if (age < 18) {
+                Swal.fire("Error", "You must be at least 18 years old to join.", "error");
+                return;
+            }
+
+            if (password !== confirmPassword) {
+                Swal.fire("Error", "Passwords do not match!", "error");
+                return;
+            }
+
             signupBtn.disabled = true;
             signupBtn.innerText = "Processing...";
 
@@ -114,48 +135,41 @@
                 const deviceID = generateHardwareID();
                 const email = document.getElementById('email').value.trim();
                 const phone = document.getElementById('phoneNumber').value.trim();
-                const fullName = document.getElementById('fullName').value.trim();
-                const password = document.getElementById('password').value;
-                const confirmPassword = document.getElementById('confirmPassword').value;
+                const imageFile = document.getElementById('profileImage').files[0];
 
-                if (password !== confirmPassword) throw new Error("Passwords do not match!");
-
-                // Check Device
+                // Check Device Lock
                 const deviceSnap = await db.ref('registered-devices').child(deviceID).once('value');
-                if (deviceSnap.exists()) {
-                    throw new Error("Security Alert: Device already registered!");
-                }
+                if (deviceSnap.exists()) throw new Error("Security Alert: Device already registered!");
 
-                // Check Phone
+                // Check Phone Use
                 const phoneSnap = await db.ref('used-phones').child(phone).once('value');
                 if (phoneSnap.exists()) throw new Error("Phone number already used!");
 
-                let profileImageUrl = ""; 
-                // Image Upload (If selected)
+                let profileImageUrl = "https://ui-avatars.com/api/?name=" + fullName; 
+
                 if (imageFile) {
                     signupBtn.innerText = "Uploading Image...";
                     profileImageUrl = await uploadToCloudinary(imageFile);
                 }
 
-                // Create User
                 signupBtn.innerText = "Creating Account...";
                 const userCredential = await auth.createUserWithEmailAndPassword(email, password);
                 const user = userCredential.user;
 
-                // Save All Data to Firebase
                 const updates = {};
                 updates['user-info/' + user.uid] = {
                     search_meta: {
                         userType: document.getElementById('userType').value,
                         country: document.getElementById('country').value,
-                        age: parseInt(document.getElementById('age').value),
+                        age: age,
                         deviceID: deviceID
                     },
                     profile: {
                         fullName: fullName,
                         email: email,
                         phone: phone,
-                        profilePic: profileImageUrl || "default_avatar_url_here",
+                        profilePic: profileImageUrl,
+                        coverPic: "", // Default empty cover
                         createdAt: firebase.database.ServerValue.TIMESTAMP
                     }
                 };
@@ -163,12 +177,12 @@
                 updates['used-phones/' + phone] = user.uid;
 
                 await db.ref().update(updates);
-
-                alert("Success! Account created and device locked.");
-                window.location.href = "account.html";
+                Swal.fire("Success", "Account created and device locked.", "success").then(() => {
+                    window.location.href = "account.html";
+                });
 
             } catch (error) {
-                alert(error.message);
+                Swal.fire("Error", error.message, "error");
                 signupBtn.disabled = false;
                 signupBtn.innerText = "Sign Up Now";
             }
