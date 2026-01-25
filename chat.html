@@ -10,77 +10,45 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
     <style>
-        body { user-select: none; -webkit-tap-highlight-color: transparent; background-color: #fff; }
-        
-        /* 🔒 Push Notification CSS */
-        #pushNotification { 
-            position: fixed; top: -250px; left: 50%; transform: translateX(-50%);
-            width: 95%; max-width: 450px; z-index: 99999; 
-            transition: all 0.6s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+        body { 
+            user-select: none; 
+            -webkit-tap-highlight-color: transparent; 
+            background-color: #fff; 
         }
-        #pushNotification.show { top: 20px; }
-        .notif-card { 
-            background: white; border-radius: 25px; padding: 15px; 
-            box-shadow: 0 20px 60px rgba(0,0,0,0.2); border: 1px solid rgba(0,0,0,0.05); 
-        }
-        .notif-badge {
-            position: absolute; top: -5px; right: -5px;
-            background: #ff3b30; color: white; font-size: 10px;
-            font-weight: bold; padding: 2px 6px; border-radius: 10px; border: 2px solid white;
-        }
-        .notif-reply-box { display: none; margin-top: 15px; border-top: 1px solid #f0f0f0; padding-top: 12px; }
-        .notif-reply-box.active { display: flex; gap: 10px; align-items: center; }
-        
         #messages::-webkit-scrollbar { width: 4px; }
         #messages::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
-        
-        /* SVG Badge Style */
         .v-badge { width: 16px; height: 16px; display: inline-block; margin-left: 4px; vertical-align: middle; }
     </style>
     
     <script>
-        // 🔒 Security: Disable Inspect, Right Click & Shortcuts (As requested)
+        // 🔒 Right Click Disable
         document.addEventListener('contextmenu', e => e.preventDefault());
+
+        // 🔒 Keyboard Shortcuts Disable
         document.onkeydown = function(e) {
-            if (e.keyCode == 123 || 
-                (e.ctrlKey && e.shiftKey && (e.keyCode == 73 || e.keyCode == 67 || e.keyCode == 74)) || 
-                (e.ctrlKey && e.keyCode == 85)) {
+            if (
+                e.keyCode == 123 || 
+                (e.ctrlKey && e.shiftKey && (e.keyCode == 73 || e.keyCode == 74 || e.keyCode == 67)) || 
+                (e.ctrlKey && e.keyCode == 85)
+            ) {
                 return false;
             }
         };
+
+        // 🔒 Simple DevTools Detection (White screen avoid করার জন্য লুপ কমানো হয়েছে)
+        let devtools = function() {};
+        devtools.toString = function() {
+            window.location.reload();
+            return '';
+        }
+        // console.log('%c', devtools); 
     </script>
 </head>
 <body class="max-w-[500px] mx-auto h-screen flex flex-col bg-white">
 
-    <div id="pushNotification">
-        <div class="notif-card">
-            <div class="flex items-center gap-4 cursor-pointer" id="notifLink">
-                <div class="relative">
-                    <img id="notifImg" src="" class="w-14 h-14 rounded-full object-cover border-2 border-blue-500">
-                    <span class="notif-badge">New</span>
-                </div>
-                <div class="flex-1 overflow-hidden">
-                    <div class="flex justify-between items-center">
-                        <span id="notifName" class="font-black text-gray-800 text-sm">User</span>
-                        <span class="text-[10px] text-blue-600 font-bold uppercase">New SMS</span>
-                    </div>
-                    <p id="notifMsg" class="text-sm text-gray-500 truncate mt-0.5">Message preview...</p>
-                </div>
-            </div>
-            <div class="flex mt-3 gap-2">
-                <button onclick="activateReply()" class="flex-1 py-2 bg-blue-50 text-blue-600 font-bold rounded-xl text-xs tracking-widest transition">REPLY</button>
-                <button onclick="dismissNotif()" class="flex-1 py-2 bg-gray-50 text-gray-400 font-bold rounded-xl text-xs tracking-widest transition">DISMISS</button>
-            </div>
-            <div id="quickReplyBox" class="notif-reply-box">
-                <input type="text" id="quickReplyInput" placeholder="Write a reply..." class="flex-1 bg-gray-100 rounded-full px-4 py-2 text-sm outline-none border">
-                <button id="quickSendBtn" class="bg-blue-600 text-white w-10 h-10 rounded-full flex items-center justify-center shadow-lg"><i class="fas fa-paper-plane"></i></button>
-            </div>
-        </div>
-    </div>
-
     <div class="p-4 border-b flex items-center gap-3 bg-white sticky top-0 z-10">
         <i class="fas fa-arrow-left text-blue-500 text-lg cursor-pointer p-1" onclick="window.history.back()"></i>
-        <img id="headPic" class="w-10 h-10 rounded-full object-cover border">
+        <img id="headPic" class="w-10 h-10 rounded-full object-cover border" src="https://ui-avatars.com/api/?name=User">
         <div class="flex-1">
             <h2 id="headName" class="font-bold text-[15px] text-gray-900 flex items-center">Loading...</h2>
             <div id="headStatus" class="text-[10px] flex items-center gap-1 text-gray-400">
@@ -93,7 +61,7 @@
     <div id="messages" class="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50"></div>
 
     <div class="p-3 border-t bg-white flex gap-2 items-center">
-        <input id="msgInput" type="text" placeholder="Type a message..." class="flex-1 bg-gray-100 rounded-full px-5 py-2.5 outline-none text-sm border focus:border-blue-300 transition" onkeypress="if(event.key==='Enter')sendMsg()">
+        <input id="msgInput" type="text" placeholder="Type a message..." class="flex-1 bg-gray-100 rounded-full px-5 py-2.5 outline-none text-sm border focus:border-blue-300 transition" autocomplete="off" onkeypress="if(event.key==='Enter')sendMsg()">
         <button onclick="sendMsg()" class="bg-blue-500 text-white w-10 h-10 rounded-full flex items-center justify-center shadow-lg active:scale-90 transition flex-shrink-0">
             <i class="fas fa-paper-plane"></i>
         </button>
@@ -110,23 +78,21 @@
         const db = firebase.database(), auth = firebase.auth();
         const urlParams = new URLSearchParams(window.location.search);
         const receiverId = urlParams.get('uid');
-        let myUid = "", chatKey = "", notificationQueue = [], isShowingNotif = false;
+        let myUid = "", chatKey = "";
 
-        // SVG Blue Badge (As used in sms-list)
-        const blueBadgeSvg = `<svg class="v-badge" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5213 2.62368C11.3147 1.75255 12.6853 1.75255 13.4787 2.62368L14.4989 3.74391C14.8326 4.11041 15.3059 4.30642 15.8039 4.28394L17.3255 4.21526C18.5089 4.16179 19.5041 5.15705 19.4506 6.34045L19.3819 7.86208C19.3595 8.36012 19.5555 8.83342 19.922 9.16713L21.0422 10.1873C21.9133 10.9807 21.9133 12.3513 21.0422 13.1447L19.922 14.1649C19.5555 14.4986 19.3595 14.9719 19.3819 15.4699L19.4506 16.9915C19.5041 18.1749 18.5089 19.1702 17.3255 19.1167L15.8039 19.048C15.3059 19.0255 14.8326 19.2216 14.4989 19.5881L13.4787 20.7083C12.6853 21.5794 11.3147 21.5794 10.5213 20.7083L9.50106 19.5881C9.16735 19.2216 8.69405 19.0255 8.19601 19.048L6.67442 19.1167C5.49103 19.1702 4.49577 18.1749 4.54924 16.9915L4.61792 15.4699C4.6404 14.9719 4.44439 14.4986 4.07789 14.1649L2.95771 13.1447C2.08658 12.3513 2.08658 10.9807 2.95771 10.1873L4.07789 9.16713C4.44439 8.83342 4.6404 8.36012 4.61792 7.86208L4.54924 6.34045C4.49577 5.15705 5.49103 4.16179 6.67442 4.21526L8.19601 4.28394C8.69405 4.30642 9.16735 4.11041 9.50106 3.74391L10.5213 2.62368Z" fill="#1D9BF0"/><path d="M10 12.5L11.5 14L15 10.5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+        const blueBadgeSvg = `<svg class="v-badge" viewBox="0 0 24 24" fill="none"><path d="M10.5213 2.62368C11.3147 1.75255 12.6853 1.75255 13.4787 2.62368L14.4989 3.74391C14.8326 4.11041 15.3059 4.30642 15.8039 4.28394L17.3255 4.21526C18.5089 4.16179 19.5041 5.15705 19.4506 6.34045L19.3819 7.86208C19.3595 8.36012 19.5555 8.83342 19.922 9.16713L21.0422 10.1873C21.9133 10.9807 21.9133 12.3513 21.0422 13.1447L19.922 14.1649C19.5555 14.4986 19.3595 14.9719 19.3819 15.4699L19.4506 16.9915C19.5041 18.1749 18.5089 19.1702 17.3255 19.1167L15.8039 19.048C15.3059 19.0255 14.8326 19.2216 14.4989 19.5881L13.4787 20.7083C12.6853 21.5794 11.3147 21.5794 10.5213 20.7083L9.50106 19.5881C9.16735 19.2216 8.69405 19.0255 8.19601 19.048L6.67442 19.1167C5.49103 19.1702 4.49577 18.1749 4.54924 16.9915L4.61792 15.4699C4.6404 14.9719 4.44439 14.4986 4.07789 14.1649L2.95771 13.1447C2.08658 12.3513 2.08658 10.9807 2.95771 10.1873L4.07789 9.16713C4.44439 8.83342 4.6404 8.36012 4.61792 7.86208L4.54924 6.34045C4.49577 5.15705 5.49103 4.16179 6.67442 4.21526L8.19601 4.28394C8.69405 4.30642 9.16735 4.11041 9.50106 3.74391L10.5213 2.62368Z" fill="#1D9BF0"/><path d="M10 12.5L11.5 14L15 10.5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
         auth.onAuthStateChanged(user => {
             if (user && receiverId) {
                 myUid = user.uid;
                 chatKey = myUid < receiverId ? myUid + "_" + receiverId : receiverId + "_" + myUid;
-                
-                // Keep self active (User Panel logic)
                 manageMyPresence(myUid);
-                
                 loadHeader();
                 loadMessages();
-                listenForNotifications();
-            } else { window.location.href = "sms-list.html"; }
+            } else { 
+                // এখানে চেক করুন আপনার sms-list.html ফাইলটি ঠিক আছে কি না
+                console.log("No User Found"); 
+            }
         });
 
         function manageMyPresence(uid) {
@@ -137,15 +103,13 @@
         }
 
         function loadHeader() {
-            // Profile & SVG Badge
             db.ref(`user-info/${receiverId}/profile`).on('value', s => {
                 const u = s.val() || {};
                 const isVerified = u.isVerified === true || u.isVerified === "true";
                 document.getElementById('headName').innerHTML = (u.fullName || "User") + (isVerified ? blueBadgeSvg : '');
-                document.getElementById('headPic').src = u.profilePic || 'https://ui-avatars.com/api/?name='+u.fullName;
+                document.getElementById('headPic').src = u.profilePic || 'https://ui-avatars.com/api/?name='+ (u.fullName || 'User');
             });
 
-            // 🟢 Instant Active Status
             db.ref(`status/${receiverId}`).on('value', s => {
                 const data = s.val();
                 const isOnline = data && (data.state === 'online' || Date.now() < data.last);
@@ -175,53 +139,6 @@
             if(!txt) return;
             db.ref(`chats/${chatKey}`).push({ senderId: myUid, text: txt, timestamp: Date.now() });
             input.value = "";
-        }
-
-        // 🔔 Notification Logic (Similar to User Panel)
-        function listenForNotifications() {
-            db.ref('chats').on('child_added', snap => {
-                if (snap.key.includes(myUid) && snap.key !== chatKey) {
-                    db.ref(`chats/${snap.key}`).limitToLast(1).on('child_added', async mSnap => {
-                        const m = mSnap.val();
-                        if (m.senderId !== myUid && !localStorage.getItem('seen_' + mSnap.key)) {
-                            notificationQueue.push({ ...m, id: mSnap.key, chatKey: snap.key });
-                            showNextNotif();
-                        }
-                    });
-                }
-            });
-        }
-
-        async function showNextNotif() {
-            if (isShowingNotif || notificationQueue.length === 0) return;
-            isShowingNotif = true;
-            const m = notificationQueue.shift();
-            localStorage.setItem('seen_' + m.id, 'true');
-
-            const uSnap = await db.ref(`user-info/${m.senderId}/profile`).once('value');
-            const user = uSnap.val() || {};
-            
-            document.getElementById('notifImg').src = user.profilePic || 'https://ui-avatars.com/api/?name=User';
-            document.getElementById('notifName').innerText = user.fullName || "User";
-            document.getElementById('notifMsg').innerText = m.text;
-            document.getElementById('pushNotification').classList.add('show');
-            
-            document.getElementById('notifLink').onclick = () => { window.location.href = `chat.html?uid=${m.senderId}`; };
-            document.getElementById('quickSendBtn').onclick = () => {
-                const r = document.getElementById('quickReplyInput').value.trim();
-                if(r) { db.ref(`chats/${m.chatKey}`).push({ senderId: myUid, text: r, timestamp: Date.now() }); dismissNotif(); }
-            };
-            setTimeout(() => { if (!document.getElementById('quickReplyBox').classList.contains('active')) dismissNotif(); }, 6000);
-        }
-
-        function activateReply() { document.getElementById('quickReplyBox').classList.add('active'); document.getElementById('quickReplyInput').focus(); }
-        function dismissNotif() { 
-            document.getElementById('pushNotification').classList.remove('show'); 
-            setTimeout(() => { 
-                document.getElementById('quickReplyBox').classList.remove('active'); 
-                document.getElementById('quickReplyInput').value = ""; 
-                isShowingNotif = false; showNextNotif(); 
-            }, 600); 
         }
     </script>
 </body>
