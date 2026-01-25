@@ -20,16 +20,19 @@
         .comment-bubble { background: #f0f2f5; border-radius: 15px; padding: 7px 12px; max-width: 85%; }
         .status-indicator { position: absolute; bottom: 8px; right: 8px; width: 16px; height: 16px; border-radius: 50%; border: 3px solid white; background: #ccc; }
         .status-online { background: #31a24c; }
+        /* Cover photo smooth display */
+        #coverImg { transition: opacity 0.3s ease-in; }
     </style>
 </head>
 <body class="pb-10">
 
     <div id="profileWrapper" class="max-w-[500px] mx-auto">
         <div class="bg-white border-b pb-4 shadow-sm">
-            <div class="h-40 bg-gradient-to-r from-blue-500 to-cyan-500 relative">
+            <div id="coverBg" class="h-40 bg-gradient-to-r from-blue-500 to-cyan-500 relative overflow-hidden">
                 <img id="coverImg" class="w-full h-full object-cover hidden">
-                <button onclick="history.back()" class="absolute top-3 left-3 text-white bg-black/30 w-8 h-8 rounded-full"><i class="fas fa-arrow-left"></i></button>
+                <button onclick="history.back()" class="absolute top-3 left-3 text-white bg-black/30 w-8 h-8 rounded-full z-10 flex items-center justify-center"><i class="fas fa-arrow-left"></i></button>
             </div>
+            
             <div class="px-4 text-center">
                 <div class="relative inline-block">
                     <img id="userPic" src="" class="profile-pic mx-auto shadow-md">
@@ -86,8 +89,22 @@
         db.ref(`user-info/${uid}/profile`).on('value', snap => {
             const d = snap.val() || {};
             const isV = d.isVerified === true || d.isVerified === "true";
+            
+            // Name & Verification
             document.getElementById('userName').innerHTML = (d.fullName || "User") + (isV ? blueBadge : "");
+            
+            // Profile Photo
             document.getElementById('userPic').src = d.profilePic || `https://ui-avatars.com/api/?name=${d.fullName}`;
+            
+            // Cover Photo Logic Updated
+            const coverEl = document.getElementById('coverImg');
+            if(d.coverPic) {
+                coverEl.src = d.coverPic;
+                coverEl.classList.remove('hidden');
+            } else {
+                coverEl.classList.add('hidden');
+            }
+
             document.getElementById('userBio').innerText = d.bio || "No bio available";
             renderButtons(uid);
         });
@@ -96,6 +113,7 @@
         });
     }
 
+    // --- অন্যান্য ফাংশন আগের মতোই (Post, Comment, Like ইত্যাদি) ---
     function loadPosts(uid) {
         db.ref('posts').on('value', snap => {
             let posts = [];
