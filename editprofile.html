@@ -8,202 +8,189 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <style>
+        body { user-select: none; -webkit-tap-highlight-color: transparent; }
+        .disabled-field { background-color: #f3f4f6 !important; color: #9ca3af !important; cursor: not-allowed; }
+    </style>
+    <script>
+        // 🛡️ Security: Disable Inspect Element
+        document.addEventListener('contextmenu', e => e.preventDefault());
+        document.onkeydown = e => {
+            if (e.keyCode == 123 || (e.ctrlKey && e.shiftKey && [73, 74, 67].includes(e.keyCode)) || (e.ctrlKey && e.keyCode == 85)) return false;
+        };
+    </script>
 </head>
 <body class="bg-gray-50 flex items-center justify-center min-h-screen p-4">
 
-    <div class="max-w-md w-full bg-white rounded-3xl shadow-xl p-8 border border-gray-100">
-        <div class="text-center mb-6">
-            <h2 class="text-2xl font-bold text-gray-800">Edit Profile</h2>
-            <div id="statusMessage" class="mt-2 text-sm text-gray-500">Update your information</div>
+    <div class="max-w-md w-full bg-white rounded-3xl shadow-xl overflow-hidden border border-gray-100">
+        <div class="relative h-32 bg-indigo-100">
+            <img id="currentCoverPic" src="https://via.placeholder.com/500x200" class="w-full h-full object-cover">
+            <label for="newCoverImage" class="absolute bottom-2 right-2 bg-black/50 p-2 rounded-full cursor-pointer hover:bg-black/70">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+            </label>
+            <input type="file" id="newCoverImage" accept="image/*" class="hidden">
         </div>
 
-        <div class="flex flex-col items-center mb-6">
-            <div class="relative">
-                <img id="currentProfilePic" src="https://via.placeholder.com/150" class="w-24 h-24 rounded-full object-cover border-4 border-blue-500 shadow-md">
-                <label id="imageLabel" for="newProfileImage" class="absolute bottom-0 right-0 bg-blue-600 p-2 rounded-full cursor-pointer hover:bg-blue-700 shadow-lg">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                </label>
-                <input type="file" id="newProfileImage" accept="image/*" class="hidden">
+        <div class="p-6 pt-0">
+            <div class="flex flex-col items-center -mt-12 mb-4">
+                <div class="relative">
+                    <img id="currentProfilePic" src="https://via.placeholder.com/150" class="w-24 h-24 rounded-full object-cover border-4 border-white shadow-md bg-white">
+                    <label for="newProfileImage" class="absolute bottom-0 right-0 bg-blue-600 p-2 rounded-full cursor-pointer hover:bg-blue-700 shadow-lg">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                    </label>
+                    <input type="file" id="newProfileImage" accept="image/*" class="hidden">
+                </div>
+                <h2 class="text-xl font-bold text-gray-800 mt-2">Edit Profile</h2>
+                <div id="statusMessage" class="text-xs text-gray-500">Update your social profile</div>
             </div>
-            <p id="imageHint" class="text-xs text-gray-400 mt-2">Click icon to change photo</p>
+
+            <form id="editProfileForm" class="space-y-4">
+                <div>
+                    <label class="text-xs font-semibold text-gray-500 ml-1">Full Name (Locked for 30 days)</label>
+                    <input type="text" id="editFullName" required placeholder="Full Name" class="w-full px-4 py-2.5 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+
+                <div>
+                    <label class="text-xs font-semibold text-gray-500 ml-1">Bio (Unlimited changes)</label>
+                    <textarea id="editBio" rows="2" placeholder="Tell us about yourself..." class="w-full px-4 py-2.5 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-blue-500 resize-none"></textarea>
+                </div>
+
+                <div class="flex gap-4">
+                    <div class="w-1/2">
+                        <label class="text-xs font-semibold text-gray-500 ml-1">Age</label>
+                        <input type="number" id="editAge" required class="w-full px-4 py-2.5 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div class="w-1/2">
+                        <label class="text-xs font-semibold text-gray-500 ml-1">User Type</label>
+                        <select id="editUserType" required class="w-full px-4 py-2.5 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                            <option value="Buyer">Buyer</option>
+                            <option value="Seller">Seller</option>
+                            <option value="Both">Both</option>
+                        </select>
+                    </div>
+                </div>
+
+                <button type="submit" id="updateBtn" class="w-full py-3.5 bg-indigo-600 text-white font-bold rounded-2xl shadow-lg hover:bg-indigo-700 transition active:scale-95">
+                    Save All Changes
+                </button>
+                <button type="button" onclick="window.history.back()" class="w-full py-1 text-gray-400 text-sm hover:underline font-medium">Cancel</button>
+            </form>
         </div>
-
-        <form id="editProfileForm" class="space-y-4">
-            <div>
-                <label class="text-xs font-semibold text-gray-500 ml-1">Full Name (Letters only)</label>
-                <input type="text" id="editFullName" required 
-                    placeholder="Enter your name"
-                    class="w-full px-4 py-3 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-400">
-                <p id="nameError" class="text-[10px] text-red-500 mt-1 hidden font-medium">Symbols, emojis, and special codes are not allowed.</p>
-            </div>
-
-            <div>
-                <label class="text-xs font-semibold text-gray-500 ml-1">Bio / About</label>
-                <textarea id="editBio" rows="3" 
-                    placeholder="Tell us about yourself..." 
-                    class="w-full px-4 py-3 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-400 resize-none"></textarea>
-            </div>
-            
-            <div class="flex gap-4">
-                <div class="w-1/2">
-                    <label class="text-xs font-semibold text-gray-500 ml-1">Age</label>
-                    <input type="number" id="editAge" required class="w-full px-4 py-3 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-400">
-                </div>
-                <div class="w-1/2">
-                    <label class="text-xs font-semibold text-gray-500 ml-1">User Type</label>
-                    <select id="editUserType" required class="w-full px-4 py-3 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:bg-gray-100 disabled:text-gray-400">
-                        <option value="Buyer">Buyer</option>
-                        <option value="Seller">Seller</option>
-                        <option value="Both">Both</option>
-                    </select>
-                </div>
-            </div>
-
-            <button type="submit" id="updateBtn" class="w-full py-4 bg-indigo-600 text-white font-bold rounded-2xl shadow-lg hover:bg-indigo-700 transition disabled:bg-gray-400 disabled:cursor-not-allowed">
-                Save Changes
-            </button>
-            <button type="button" onclick="window.history.back()" class="w-full py-2 text-gray-500 font-medium hover:underline">
-                Back to Profile
-            </button>
-        </form>
     </div>
 
     <script>
-        const firebaseConfig = {
-            apiKey: "AIzaSyD1mn9MR9hyZ36Ce1lnGyJYmL6AHopScTA",
-            authDomain: "social-media-5e6c8.firebaseapp.com",
-            databaseURL: "https://social-media-5e6c8-default-rtdb.firebaseio.com/",
-            projectId: "social-media-5e6c8",
-            storageBucket: "social-media-5e6c8.firebasestorage.app",
-            messagingSenderId: "897473713729",
-            appId: "1:897473713729:web:7ba552ed4c1be8754418c0"
-        };
-
+        const firebaseConfig = { apiKey: "AIzaSyD1mn9MR9hyZ36Ce1lnGyJYmL6AHopScTA", authDomain: "social-media-5e6c8.firebaseapp.com", databaseURL: "https://social-media-5e6c8-default-rtdb.firebaseio.com/", projectId: "social-media-5e6c8" };
         const CLOUDINARY_URL = "https://api.cloudinary.com/v1_1/dhvtgzy5x/image/upload";
         const CLOUDINARY_UPLOAD_PRESET = "Rosenews";
 
         firebase.initializeApp(firebaseConfig);
-        const auth = firebase.auth();
-        const db = firebase.database();
-
-        let currentUser = null;
+        const auth = firebase.auth(), db = firebase.database();
+        let currentUser = null, isLocked = false;
 
         auth.onAuthStateChanged(async (user) => {
             if (user) {
                 currentUser = user;
                 const snapshot = await db.ref('user-info/' + user.uid).once('value');
                 const data = snapshot.val();
-
                 if (data) {
-                    // Profile data filling
                     document.getElementById('editFullName').value = data.profile.fullName || "";
                     document.getElementById('editBio').value = data.profile.bio || "";
                     document.getElementById('editAge').value = data.search_meta.age || "";
                     document.getElementById('editUserType').value = data.search_meta.userType || "Buyer";
-                    if(data.profile.profilePic) {
-                        document.getElementById('currentProfilePic').src = data.profile.profilePic;
-                    }
+                    if(data.profile.profilePic) document.getElementById('currentProfilePic').src = data.profile.profilePic;
+                    if(data.profile.coverPic) document.getElementById('currentCoverPic').src = data.profile.coverPic;
 
-                    // 30 Days Check
                     if (data.profile.lastUpdate) {
-                        const lastUpdate = data.profile.lastUpdate;
-                        const now = Date.now();
-                        const thirtyDaysInMs = 30 * 24 * 60 * 60 * 1000;
-                        const timeLeft = (lastUpdate + thirtyDaysInMs) - now;
-
+                        const timeLeft = (data.profile.lastUpdate + (30 * 24 * 60 * 60 * 1000)) - Date.now();
                         if (timeLeft > 0) {
-                            const daysLeft = Math.ceil(timeLeft / (1000 * 60 * 60 * 24));
-                            disableForm(daysLeft);
+                            isLocked = true;
+                            const days = Math.ceil(timeLeft / (1000 * 60 * 60 * 24));
+                            ['editFullName', 'editAge', 'editUserType'].forEach(id => {
+                                const el = document.getElementById(id);
+                                el.disabled = true;
+                                el.classList.add('disabled-field');
+                            });
+                            document.getElementById('statusMessage').innerHTML = `<span class="text-red-500 font-bold">Identity locked for ${days} days</span>`;
                         }
                     }
                 }
-            } else {
-                window.location.href = "login.html";
-            }
+            } else { window.location.href = "login.html"; }
         });
 
-        function disableForm(days) {
-            const inputs = ['editFullName', 'editBio', 'editAge', 'editUserType', 'newProfileImage'];
-            inputs.forEach(id => document.getElementById(id).disabled = true);
-            document.getElementById('updateBtn').disabled = true;
-            document.getElementById('imageLabel').style.display = 'none';
-            document.getElementById('imageHint').innerText = "Locked for 30 days";
-            document.getElementById('statusMessage').innerHTML = `<span class="text-red-500 font-bold">Account Locked! Wait ${days} days to change info again.</span>`;
-        }
+        // Instant Previews
+        const setupPreview = (inputID, imgID) => {
+            document.getElementById(inputID).addEventListener('change', function(e) {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => document.getElementById(imgID).src = e.target.result;
+                    reader.readAsDataURL(file);
+                }
+            });
+        };
+        setupPreview('newProfileImage', 'currentProfilePic');
+        setupPreview('newCoverImage', 'currentCoverPic');
 
-        // Image Preview
-        document.getElementById('newProfileImage').addEventListener('change', function(e) {
-            const file = e.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = (e) => document.getElementById('currentProfilePic').src = e.target.result;
-                reader.readAsDataURL(file);
-            }
-        });
-
-        async function uploadToCloudinary(file) {
+        async function uploadImage(file) {
             const formData = new FormData();
             formData.append('file', file);
             formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
-            const response = await fetch(CLOUDINARY_URL, { method: 'POST', body: formData });
-            const data = await response.json();
+            const res = await fetch(CLOUDINARY_URL, { method: 'POST', body: formData });
+            const data = await res.json();
             return data.secure_url;
         }
 
-        // Form Submit
         document.getElementById('editProfileForm').addEventListener('submit', async (e) => {
             e.preventDefault();
+            const btn = document.getElementById('updateBtn');
+            const name = document.getElementById('editFullName').value.trim();
+            const bio = document.getElementById('editBio').value.trim();
             
-            const updateBtn = document.getElementById('updateBtn');
-            const nameField = document.getElementById('editFullName');
-            const bioField = document.getElementById('editBio');
-            const imageFile = document.getElementById('newProfileImage').files[0];
-            
-            // --- SECURITY VALIDATION FOR NAME ---
-            // Only English Letters (A-Z, a-z) and Space are allowed. 
-            // No Emoji, Symbols, Code tags, or Icons.
-            const nameRegex = /^[a-zA-Z\s]+$/; 
-
-            if (!nameRegex.test(nameField.value)) {
-                document.getElementById('nameError').classList.remove('hidden');
-                nameField.classList.add('border-red-500');
+            // ❌ STRICT NAME VALIDATION
+            const normalizedName = name.toLowerCase().replace(/\s+/g, '');
+            if (normalizedName.includes("socialtrade")) {
+                Swal.fire("Error", "'Social Trade' name is reserved and cannot be used.", "error");
                 return;
-            } else {
-                document.getElementById('nameError').classList.add('hidden');
-                nameField.classList.remove('border-red-500');
+            }
+            if (!/^[a-zA-Z\s]+$/.test(name)) {
+                Swal.fire("Error", "Name can only contain English letters.", "error");
+                return;
             }
 
-            updateBtn.disabled = true;
-            updateBtn.innerText = "Processing...";
+            btn.disabled = true; btn.innerText = "Saving...";
 
             try {
-                let imageUrl = document.getElementById('currentProfilePic').src;
+                let pPic = document.getElementById('currentProfilePic').src;
+                let cPic = document.getElementById('currentCoverPic').src;
 
-                if (imageFile) {
-                    updateBtn.innerText = "Uploading Image...";
-                    imageUrl = await uploadToCloudinary(imageFile);
+                if (document.getElementById('newProfileImage').files[0]) {
+                    pPic = await uploadImage(document.getElementById('newProfileImage').files[0]);
+                }
+                if (document.getElementById('newCoverImage').files[0]) {
+                    cPic = await uploadImage(document.getElementById('newCoverImage').files[0]);
                 }
 
                 const updates = {};
-                updates[`user-info/${currentUser.uid}/profile/fullName`] = nameField.value.trim();
-                updates[`user-info/${currentUser.uid}/profile/bio`] = bioField.value.trim();
-                updates[`user-info/${currentUser.uid}/profile/profilePic`] = imageUrl;
-                updates[`user-info/${currentUser.uid}/profile/lastUpdate`] = Date.now();
-                updates[`user-info/${currentUser.uid}/search_meta/age`] = parseInt(document.getElementById('editAge').value);
-                updates[`user-info/${currentUser.uid}/search_meta/userType`] = document.getElementById('editUserType').value;
+                // Fields that can always be updated
+                updates[`user-info/${currentUser.uid}/profile/bio`] = bio;
+                updates[`user-info/${currentUser.uid}/profile/profilePic`] = pPic;
+                updates[`user-info/${currentUser.uid}/profile/coverPic`] = cPic;
+
+                // Locked fields
+                if (!isLocked) {
+                    updates[`user-info/${currentUser.uid}/profile/fullName`] = name;
+                    updates[`user-info/${currentUser.uid}/profile/lastUpdate`] = Date.now();
+                    updates[`user-info/${currentUser.uid}/search_meta/age`] = parseInt(document.getElementById('editAge').value);
+                    updates[`user-info/${currentUser.uid}/search_meta/userType`] = document.getElementById('editUserType').value;
+                }
 
                 await db.ref().update(updates);
+                Swal.fire("Success", "Profile updated successfully!", "success").then(() => location.reload());
 
-                alert("Success! Profile updated and locked for 30 days.");
-                location.reload();
-
-            } catch (error) {
-                alert("Error: " + error.message);
-                updateBtn.disabled = false;
-                updateBtn.innerText = "Save Changes";
+            } catch (err) {
+                Swal.fire("Error", err.message, "error");
+                btn.disabled = false; btn.innerText = "Save Changes";
             }
         });
     </script>
