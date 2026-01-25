@@ -10,8 +10,9 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
     <style>
-        body { user-select: none; -webkit-tap-highlight-color: transparent; }
-        /* 🔔 Push Notification CSS */
+        body { user-select: none; -webkit-tap-highlight-color: transparent; background-color: #fff; }
+        
+        /* 🔒 Push Notification CSS */
         #pushNotification { 
             position: fixed; top: -250px; left: 50%; transform: translateX(-50%);
             width: 95%; max-width: 450px; z-index: 99999; 
@@ -32,13 +33,20 @@
         
         #messages::-webkit-scrollbar { width: 4px; }
         #messages::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
-        .verified-badge { width: 14px; height: 14px; margin-left: 3px; display: inline-block; vertical-align: middle; }
+        
+        /* SVG Badge Style */
+        .v-badge { width: 16px; height: 16px; display: inline-block; margin-left: 4px; vertical-align: middle; }
     </style>
+    
     <script>
-        // 🛡️ Advanced Security Logic (Inspect Block)
+        // 🔒 Security: Disable Inspect, Right Click & Shortcuts (As requested)
         document.addEventListener('contextmenu', e => e.preventDefault());
         document.onkeydown = function(e) {
-            if (e.keyCode == 123 || (e.ctrlKey && e.shiftKey && (e.keyCode == 'I'.charCodeAt(0) || e.keyCode == 'C'.charCodeAt(0) || e.keyCode == 'J'.charCodeAt(0))) || (e.ctrlKey && e.keyCode == 'U'.charCodeAt(0))) return false;
+            if (e.keyCode == 123 || 
+                (e.ctrlKey && e.shiftKey && (e.keyCode == 73 || e.keyCode == 67 || e.keyCode == 74)) || 
+                (e.ctrlKey && e.keyCode == 85)) {
+                return false;
+            }
         };
     </script>
 </head>
@@ -71,10 +79,10 @@
     </div>
 
     <div class="p-4 border-b flex items-center gap-3 bg-white sticky top-0 z-10">
-        <i class="fas fa-arrow-left text-blue-500 text-lg cursor-pointer" onclick="window.history.back()"></i>
+        <i class="fas fa-arrow-left text-blue-500 text-lg cursor-pointer p-1" onclick="window.history.back()"></i>
         <img id="headPic" class="w-10 h-10 rounded-full object-cover border">
         <div class="flex-1">
-            <h2 id="headName" class="font-bold text-sm text-gray-800 flex items-center">Loading...</h2>
+            <h2 id="headName" class="font-bold text-[15px] text-gray-900 flex items-center">Loading...</h2>
             <div id="headStatus" class="text-[10px] flex items-center gap-1 text-gray-400">
                 <span id="statusDot" class="w-2 h-2 rounded-full bg-gray-300"></span>
                 <span id="statusText">Checking...</span>
@@ -82,87 +90,81 @@
         </div>
     </div>
 
-    <div id="messages" class="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50"></div>
+    <div id="messages" class="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50"></div>
 
     <div class="p-3 border-t bg-white flex gap-2 items-center">
         <input id="msgInput" type="text" placeholder="Type a message..." class="flex-1 bg-gray-100 rounded-full px-5 py-2.5 outline-none text-sm border focus:border-blue-300 transition" onkeypress="if(event.key==='Enter')sendMsg()">
-        <button onclick="sendMsg()" class="bg-blue-500 text-white w-10 h-10 rounded-full flex items-center justify-center shadow-lg active:scale-90 transition">
+        <button onclick="sendMsg()" class="bg-blue-500 text-white w-10 h-10 rounded-full flex items-center justify-center shadow-lg active:scale-90 transition flex-shrink-0">
             <i class="fas fa-paper-plane"></i>
         </button>
     </div>
 
     <script>
-        const firebaseConfig = { apiKey: "AIzaSyD1mn9MR9hyZ36Ce1lnGyJYmL6AHopScTA", authDomain: "social-media-5e6c8.firebaseapp.com", databaseURL: "https://social-media-5e6c8-default-rtdb.firebaseio.com/", projectId: "social-media-5e6c8" };
+        const firebaseConfig = { 
+            apiKey: "AIzaSyD1mn9MR9hyZ36Ce1lnGyJYmL6AHopScTA", 
+            authDomain: "social-media-5e6c8.firebaseapp.com", 
+            databaseURL: "https://social-media-5e6c8-default-rtdb.firebaseio.com/", 
+            projectId: "social-media-5e6c8" 
+        };
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database(), auth = firebase.auth();
         const urlParams = new URLSearchParams(window.location.search);
         const receiverId = urlParams.get('uid');
         let myUid = "", chatKey = "", notificationQueue = [], isShowingNotif = false;
 
-        const blueBadge = `<svg class="verified-badge" viewBox="0 0 24 24" fill="#1877F2" xmlns="http://www.w3.org/2000/svg"><path d="M23.389 10.519L20.897 7.741L21.242 4.025L17.591 3.201L15.681 0L12 1.583L8.319 0L6.409 3.201L2.758 4.015L3.103 7.741L0.611 10.519L2.758 13.297L2.413 17.023L6.064 17.847L7.974 21.048L11.655 19.465L15.336 21.048L17.246 17.847L20.897 17.023L20.552 13.297L22.699 10.519H23.389ZM10.526 15.111L6.776 11.361L8.243 9.894L10.526 12.177L15.757 6.946L17.224 8.413L10.526 15.111Z"/></svg>`;
+        // SVG Blue Badge (As used in sms-list)
+        const blueBadgeSvg = `<svg class="v-badge" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5213 2.62368C11.3147 1.75255 12.6853 1.75255 13.4787 2.62368L14.4989 3.74391C14.8326 4.11041 15.3059 4.30642 15.8039 4.28394L17.3255 4.21526C18.5089 4.16179 19.5041 5.15705 19.4506 6.34045L19.3819 7.86208C19.3595 8.36012 19.5555 8.83342 19.922 9.16713L21.0422 10.1873C21.9133 10.9807 21.9133 12.3513 21.0422 13.1447L19.922 14.1649C19.5555 14.4986 19.3595 14.9719 19.3819 15.4699L19.4506 16.9915C19.5041 18.1749 18.5089 19.1702 17.3255 19.1167L15.8039 19.048C15.3059 19.0255 14.8326 19.2216 14.4989 19.5881L13.4787 20.7083C12.6853 21.5794 11.3147 21.5794 10.5213 20.7083L9.50106 19.5881C9.16735 19.2216 8.69405 19.0255 8.19601 19.048L6.67442 19.1167C5.49103 19.1702 4.49577 18.1749 4.54924 16.9915L4.61792 15.4699C4.6404 14.9719 4.44439 14.4986 4.07789 14.1649L2.95771 13.1447C2.08658 12.3513 2.08658 10.9807 2.95771 10.1873L4.07789 9.16713C4.44439 8.83342 4.6404 8.36012 4.61792 7.86208L4.54924 6.34045C4.49577 5.15705 5.49103 4.16179 6.67442 4.21526L8.19601 4.28394C8.69405 4.30642 9.16735 4.11041 9.50106 3.74391L10.5213 2.62368Z" fill="#1D9BF0"/><path d="M10 12.5L11.5 14L15 10.5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
         auth.onAuthStateChanged(user => {
             if (user && receiverId) {
                 myUid = user.uid;
                 chatKey = myUid < receiverId ? myUid + "_" + receiverId : receiverId + "_" + myUid;
-                checkMyBlockStatus();
-                updateMyStatus(true);
+                
+                // Keep self active (User Panel logic)
+                manageMyPresence(myUid);
+                
                 loadHeader();
                 loadMessages();
                 listenForNotifications();
-                // 🔄 Refresh status every 1 min while on page
-                setInterval(() => updateMyStatus(true), 60000);
             } else { window.location.href = "sms-list.html"; }
         });
 
-        function checkMyBlockStatus() {
-            db.ref(`user-info/${myUid}/profile`).on('value', s => {
-                if(s.val()?.status === 'blocked') window.location.href = "error.html";
-            });
+        function manageMyPresence(uid) {
+            const statusRef = db.ref(`status/${uid}`);
+            const update = () => statusRef.set({ state: 'online', last: Date.now() + 180000 });
+            update();
+            setInterval(update, 60000);
         }
 
-        function updateMyStatus(online) {
-            const statusRef = db.ref(`status/${myUid}`);
-            if (online) {
-                statusRef.set({ state: 'online', last: Date.now() + 180000 });
-            } else {
-                statusRef.update({ last: Date.now() + 180000 });
-            }
-        }
-
-        // 🟢 Persistent Active Logic (3 min) on close/background
-        window.addEventListener('visibilitychange', () => {
-            updateMyStatus(document.visibilityState === 'visible');
-        });
-
-        async function loadHeader() {
-            // Profile & Blue Badge logic
+        function loadHeader() {
+            // Profile & SVG Badge
             db.ref(`user-info/${receiverId}/profile`).on('value', s => {
                 const u = s.val() || {};
-                document.getElementById('headName').innerHTML = (u.fullName || "User") + (u.isVerified ? blueBadge : '');
+                const isVerified = u.isVerified === true || u.isVerified === "true";
+                document.getElementById('headName').innerHTML = (u.fullName || "User") + (isVerified ? blueBadgeSvg : '');
                 document.getElementById('headPic').src = u.profilePic || 'https://ui-avatars.com/api/?name='+u.fullName;
             });
 
-            // 🟢 Dynamic Active Status (Reload-free)
+            // 🟢 Instant Active Status
             db.ref(`status/${receiverId}`).on('value', s => {
                 const data = s.val();
                 const isOnline = data && (data.state === 'online' || Date.now() < data.last);
                 document.getElementById('statusText').innerText = isOnline ? "Active now" : "Offline";
-                document.getElementById('statusDot').className = `w-2 h-2 rounded-full ${isOnline ? 'bg-green-500' : 'bg-gray-300'}`;
-                document.getElementById('headStatus').className = `text-[10px] flex items-center gap-1 ${isOnline ? 'text-green-500 font-bold' : 'text-gray-400'}`;
+                document.getElementById('statusDot').className = `w-2.5 h-2.5 rounded-full ${isOnline ? 'bg-green-500 shadow-[0_0_5px_#22c55e]' : 'bg-gray-300'}`;
+                document.getElementById('headStatus').className = `text-[10px] flex items-center gap-1 mt-0.5 ${isOnline ? 'text-green-500 font-bold' : 'text-gray-400'}`;
             });
         }
 
         function loadMessages() {
             db.ref(`chats/${chatKey}`).on('value', snap => {
                 const msgs = snap.val() || {};
-                document.getElementById('messages').innerHTML = Object.values(msgs).map(m => `
-                    <div class="flex ${m.senderId === myUid ? 'justify-end' : 'justify-start'} animate-fade-in">
-                        <div class="max-w-[75%] px-4 py-2 rounded-2xl text-sm shadow-sm ${m.senderId === myUid ? 'bg-blue-500 text-white rounded-tr-none' : 'bg-white text-gray-800 border rounded-tl-none'}">
+                const container = document.getElementById('messages');
+                container.innerHTML = Object.values(msgs).map(m => `
+                    <div class="flex ${m.senderId === myUid ? 'justify-end' : 'justify-start'}">
+                        <div class="max-w-[80%] px-4 py-2.5 rounded-2xl text-[14px] shadow-sm ${m.senderId === myUid ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white text-gray-800 border border-gray-100 rounded-bl-none'}">
                             ${m.text}
                         </div>
                     </div>`).join('');
-                const container = document.getElementById('messages');
                 container.scrollTop = container.scrollHeight;
             });
         }
@@ -173,16 +175,15 @@
             if(!txt) return;
             db.ref(`chats/${chatKey}`).push({ senderId: myUid, text: txt, timestamp: Date.now() });
             input.value = "";
-            updateMyStatus(true); // Sending msg keeps you active
         }
 
-        // 🔔 Notification System
+        // 🔔 Notification Logic (Similar to User Panel)
         function listenForNotifications() {
             db.ref('chats').on('child_added', snap => {
                 if (snap.key.includes(myUid) && snap.key !== chatKey) {
                     db.ref(`chats/${snap.key}`).limitToLast(1).on('child_added', async mSnap => {
                         const m = mSnap.val();
-                        if (m.senderId !== myUid && !localStorage.getItem('notif_' + mSnap.key)) {
+                        if (m.senderId !== myUid && !localStorage.getItem('seen_' + mSnap.key)) {
                             notificationQueue.push({ ...m, id: mSnap.key, chatKey: snap.key });
                             showNextNotif();
                         }
@@ -195,7 +196,7 @@
             if (isShowingNotif || notificationQueue.length === 0) return;
             isShowingNotif = true;
             const m = notificationQueue.shift();
-            localStorage.setItem('notif_' + m.id, 'true');
+            localStorage.setItem('seen_' + m.id, 'true');
 
             const uSnap = await db.ref(`user-info/${m.senderId}/profile`).once('value');
             const user = uSnap.val() || {};
@@ -210,8 +211,7 @@
                 const r = document.getElementById('quickReplyInput').value.trim();
                 if(r) { db.ref(`chats/${m.chatKey}`).push({ senderId: myUid, text: r, timestamp: Date.now() }); dismissNotif(); }
             };
-
-            setTimeout(() => { if (!document.getElementById('quickReplyBox').classList.contains('active')) dismissNotif(); }, 7000);
+            setTimeout(() => { if (!document.getElementById('quickReplyBox').classList.contains('active')) dismissNotif(); }, 6000);
         }
 
         function activateReply() { document.getElementById('quickReplyBox').classList.add('active'); document.getElementById('quickReplyInput').focus(); }
