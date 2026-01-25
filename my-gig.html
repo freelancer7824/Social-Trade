@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Gigs - SocialTrade</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap');
+        body { 
+            font-family: 'Plus Jakarta Sans', sans-serif; 
+            background-color: #f8fafc; 
+            user-select: none; 
+            -webkit-tap-highlight-color: transparent;
+        }
+        .gig-card { animation: slideUp 0.4s ease-out; }
+        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    </style>
+
+    <script>
+        // 🛡️ Anti-Inspect Security
+        document.addEventListener('contextmenu', e => e.preventDefault());
+        document.onkeydown = function(e) {
+            if (e.keyCode == 123 || 
+                (e.ctrlKey && e.shiftKey && (e.keyCode == 'I'.charCodeAt(0) || e.keyCode == 'J'.charCodeAt(0) || e.keyCode == 'C'.charCodeAt(0))) || 
+                (e.ctrlKey && e.keyCode == 'U'.charCodeAt(0))) {
+                return false;
+            }
+        };
+    </script>
+</head>
+<body class="pb-24">
+
+    <header class="bg-white border-b sticky top-0 z-50 px-6 py-5 flex items-center justify-between">
+        <div class="flex items-center gap-4">
+            <button onclick="window.history.back()" class="w-10 h-10 bg-gray-50 rounded-2xl flex items-center justify-center text-gray-600 active:scale-90 transition-all"><i class="fas fa-arrow-left"></i></button>
+            <h1 class="text-xl font-black text-gray-800 tracking-tighter uppercase">My <span class="text-blue-600">Gigs</span></h1>
+        </div>
+        <a href="set-gig.html" class="bg-blue-600 text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest shadow-lg shadow-blue-100 active:scale-95 transition-all">
+            <i class="fas fa-plus mr-1"></i> New Gig
+        </a>
+    </header>
+
+    <main class="max-w-2xl mx-auto p-4">
+        <div id="loading" class="text-center py-20">
+            <div class="inline-block w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+            <p class="text-xs font-bold text-gray-400 mt-4 uppercase tracking-widest">Fetching your gigs...</p>
+        </div>
+
+        <div id="noGigs" class="hidden text-center py-20">
+            <i class="fas fa-box-open text-5xl text-gray-200 mb-4"></i>
+            <p class="text-gray-500 font-bold">You haven't posted any gigs yet.</p>
+            <a href="set-gig.html" class="text-blue-600 font-black text-xs uppercase mt-2 inline-block">Create your first gig</a>
+        </div>
+
+        <div id="gigContainer" class="space-y-4">
+            </div>
+    </main>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyD1mn9MR9hyZ36Ce1lnGyJYmL6AHopScTA",
+            authDomain: "social-media-5e6c8.firebaseapp.com",
+            databaseURL: "https://social-media-5e6c8-default-rtdb.firebaseio.com/",
+            projectId: "social-media-5e6c8"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.database();
+
+        auth.onAuthStateChanged(user => {
+            if (user) {
+                loadMyGigs(user.uid);
+            } else {
+                window.location.href = "login.html";
+            }
+        });
+
+        function loadMyGigs(uid) {
+            const gigContainer = document.getElementById('gigContainer');
+            const loading = document.getElementById('loading');
+            const noGigs = document.getElementById('noGigs');
+
+            db.ref('market-items').orderByChild('publisherId').equalTo(uid).on('value', snapshot => {
+                loading.classList.add('hidden');
+                gigContainer.innerHTML = '';
+
+                if (!snapshot.exists()) {
+                    noGigs.classList.remove('hidden');
+                    return;
+                }
+
+                noGigs.classList.add('hidden');
+                const data = snapshot.val();
+                
+                // Convert object to array and sort by latest
+                const sortedKeys = Object.keys(data).reverse();
+
+                sortedKeys.forEach(key => {
+                    const gig = data[key];
+                    const itemsHtml = Object.keys(gig.items).map(platform => `
+                        <div class="flex items-center justify-between bg-gray-50 p-2 rounded-lg mb-1">
+                            <span class="text-[10px] font-bold text-gray-600 uppercase"><i class="${gig.items[platform].icon} mr-1"></i> ${platform}</span>
+                            <span class="text-[10px] font-black text-blue-600">৳${gig.items[platform].totalPrice}</span>
+                        </div>
+                    `).join('');
+
+                    gigContainer.innerHTML += `
+                        <div class="gig-card bg-white p-5 rounded-[2rem] shadow-sm border border-gray-100 relative overflow-hidden">
+                            <div class="flex justify-between items-start mb-4">
+                                <span class="text-[9px] font-black bg-blue-50 text-blue-600 px-3 py-1 rounded-full uppercase tracking-tighter">${gig.publisherType}</span>
+                                <button onclick="deleteGig('${key}')" class="text-gray-300 hover:text-red-500 transition-colors">
+                                    <i class="fas fa-trash-alt"></i>
+                                </button>
+                            </div>
+                            <h3 class="text-lg font-black text-gray-800 leading-tight mb-3">${gig.title}</h3>
+                            <div class="border-t border-dashed border-gray-100 pt-3">
+                                ${itemsHtml}
+                            </div>
+                            <p class="text-[8px] font-bold text-gray-300 uppercase mt-4 text-right tracking-widest">
+                                ${new Date(gig.createdAt).toLocaleDateString()}
+                            </p>
+                        </div>
+                    `;
+                });
+            });
+        }
+
+        async function deleteGig(gigId) {
+            const result = await Swal.fire({
+                title: 'Delete Gig?',
+                text: "This action cannot be undone!",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#f3f4f6',
+                confirmButtonText: 'YES, DELETE',
+                cancelButtonText: 'CANCEL',
+                customClass: {
+                    popup: 'rounded-[2rem]',
+                    confirmButton: 'rounded-xl font-black text-xs uppercase px-6 py-3',
+                    cancelButton: 'rounded-xl font-black text-xs uppercase px-6 py-3 text-gray-500'
+                }
+            });
+
+            if (result.isConfirmed) {
+                try {
+                    await db.ref(`market-items/${gigId}`).remove();
+                    Swal.fire({
+                        title: 'Deleted!',
+                        icon: 'success',
+                        toast: true,
+                        position: 'top-end',
+                        showConfirmButton: false,
+                        timer: 3000
+                    });
+                } catch (e) {
+                    Swal.fire('Error', e.message, 'error');
+                }
+            }
+        }
+    </script>
+</body>
+</html>
