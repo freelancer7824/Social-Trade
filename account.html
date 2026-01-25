@@ -17,11 +17,22 @@
         .sidebar-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
         .content-frame { height: calc(100vh - 64px); width: 100%; border: none; }
 
+        /* Notification Animation */
+        #pushNotification { 
+            position: fixed; top: -250px; left: 50%; transform: translateX(-50%);
+            width: 95%; max-width: 400px; z-index: 999999; 
+            transition: all 0.6s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+        }
+        #pushNotification.show { top: 20px; }
+        .notif-card { 
+            background: white; border-radius: 20px; padding: 15px; 
+            box-shadow: 0 15px 50px rgba(0,0,0,0.2); border: 1px solid #f0f0f0; 
+        }
+
         @media (max-width: 1023px) {
             #sidebar.closed { transform: translateX(-100%); }
             #sidebar.open { transform: translateX(0); }
         }
-
         @media (min-width: 1024px) {
             #sidebar { transform: translateX(0) !important; position: fixed !important; }
             .main-content { margin-left: 256px; } 
@@ -31,54 +42,56 @@
     </style>
 
     <script>
-        // 🛡️ Advanced Anti-Inspect Security
+        // Security: No Inspect Element
         document.addEventListener('contextmenu', e => e.preventDefault());
         document.onkeydown = function(e) {
             if (e.keyCode == 123 || (e.ctrlKey && e.shiftKey && (e.keyCode == 73 || e.keyCode == 67 || e.keyCode == 74)) || (e.ctrlKey && e.keyCode == 85)) return false;
         };
-        // Disable DevTools auto-open
-        setInterval(function(){ debugger; }, 100);
     </script>
 </head>
 <body class="bg-gray-100 overflow-hidden">
 
+    <audio id="notifSound" src="https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3" preload="auto"></audio>
+
+    <div id="pushNotification">
+        <div class="notif-card flex items-center gap-4 cursor-pointer shadow-xl" onclick="goToChat()">
+            <div class="relative">
+                <img id="notifImg" src="" class="w-12 h-12 rounded-full object-cover border-2 border-blue-500">
+                <span class="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full border-2 border-white">New</span>
+            </div>
+            <div class="flex-1 overflow-hidden">
+                <div class="flex justify-between items-center">
+                    <span id="notifName" class="font-bold text-gray-800 text-sm">User</span>
+                    <span class="text-[9px] text-blue-600 font-black uppercase">SocialTrade</span>
+                </div>
+                <p id="notifMsg" class="text-xs text-gray-500 truncate">New message...</p>
+            </div>
+        </div>
+    </div>
+
     <nav class="bg-white border-b border-gray-200 h-16 flex items-center justify-between px-4 fixed top-0 w-full z-50">
         <div class="flex items-center">
-            <button id="mobile-toggle" class="p-2 mr-3 text-gray-600 focus:outline-none hover:bg-gray-100 rounded-lg">
-                <i class="fas fa-bars text-xl"></i>
-            </button>
-            <span class="text-xl font-black text-blue-600 tracking-tighter">
-                SOCIALTRADE <span class="text-gray-400 text-[10px] ml-1 uppercase">User</span>
-            </span>
+            <button id="mobile-toggle" class="p-2 mr-3 text-gray-600 rounded-lg"><i class="fas fa-bars text-xl"></i></button>
+            <span class="text-xl font-black text-blue-600 tracking-tighter uppercase">SOCIALTRADE</span>
         </div>
-        
         <div class="flex items-center space-x-3">
-            <div class="hidden sm:block text-right">
-                <p id="userNameDisplay" class="text-[12px] font-bold text-gray-800 leading-none">Loading...</p>
+            <div class="text-right">
+                <p id="userNameDisplay" class="text-[12px] font-bold text-gray-800 leading-none">User</p>
                 <p class="text-[9px] text-blue-500 font-bold uppercase">Trader Account</p>
             </div>
-            <img id="userAvatar" src="https://ui-avatars.com/api/?name=User&background=0D8ABC&color=fff" 
-                 class="h-9 w-9 rounded-full border-2 border-blue-100 object-cover shadow-sm">
+            <img id="userAvatar" src="" class="h-9 w-9 rounded-full border object-cover">
         </div>
     </nav>
 
     <div class="flex pt-16 h-screen">
-        <aside id="sidebar" class="bg-white border-r border-gray-200 w-64 fixed inset-y-0 left-0 top-16 z-40 sidebar-scroll overflow-y-auto closed shadow-2xl lg:shadow-none transition-transform duration-300">
+        <aside id="sidebar" class="bg-white border-r border-gray-200 w-64 fixed inset-y-0 left-0 top-16 z-40 sidebar-scroll overflow-y-auto closed transition-transform duration-300">
             <div class="p-4 space-y-6">
                 
                 <div>
                     <h4 class="text-[10px] font-black text-gray-400 uppercase tracking-widest px-4 mb-2">Main Dashboard</h4>
                     <ul class="space-y-1">
-                        <li>
-                            <a href="allpost.html" target="contentFrame" class="nav-link flex items-center px-4 py-3 text-sm font-bold text-blue-600 bg-blue-50 rounded-xl">
-                                <i class="fas fa-th-large mr-3 w-5"></i> Home Page
-                            </a>
-                        </li>
-                        <li>
-                            <a href="marketplace.html" target="contentFrame" class="nav-link flex items-center px-4 py-3 text-sm font-bold text-gray-600 hover:bg-gray-50 rounded-xl">
-                                <i class="fas fa-shopping-basket mr-3 w-5"></i> Marketplace
-                            </a>
-                        </li>
+                        <li><a href="allpost.html" target="contentFrame" class="nav-link flex items-center px-4 py-3 text-sm font-bold text-blue-600 bg-blue-50 rounded-xl"><i class="fas fa-th-large mr-3 w-5"></i> Home Page</a></li>
+                        <li><a href="marketplace.html" target="contentFrame" class="nav-link flex items-center px-4 py-3 text-sm font-bold text-gray-600 hover:bg-gray-50 rounded-xl"><i class="fas fa-shopping-basket mr-3 w-5"></i> Marketplace</a></li>
                     </ul>
                 </div>
 
@@ -107,9 +120,7 @@
                 </div>
 
                 <div class="pt-4 border-t border-gray-100">
-                    <button onclick="logout()" class="w-full flex items-center px-4 py-3 text-sm font-black text-red-500 hover:bg-red-50 rounded-xl transition">
-                        <i class="fas fa-sign-out-alt mr-3 w-5"></i> Logout
-                    </button>
+                    <button onclick="logout()" class="w-full flex items-center px-4 py-3 text-sm font-black text-red-500 hover:bg-red-50 rounded-xl transition"><i class="fas fa-sign-out-alt mr-3 w-5"></i> Logout</button>
                 </div>
             </div>
         </aside>
@@ -121,58 +132,89 @@
     </div>
 
 <script>
-    const firebaseConfig = {
-        apiKey: "AIzaSyD1mn9MR9hyZ36Ce1lnGyJYmL6AHopScTA",
-        authDomain: "social-media-5e6c8.firebaseapp.com",
-        databaseURL: "https://social-media-5e6c8-default-rtdb.firebaseio.com/",
-        projectId: "social-media-5e6c8",
-        storageBucket: "social-media-5e6c8.firebasestorage.app",
-        messagingSenderId: "897473713729",
-        appId: "1:897473713729:web:7ba552ed4c1be8754418c0"
-    };
-
+    // Firebase Configuration
+    const firebaseConfig = { apiKey: "AIzaSyD1mn9MR9hyZ36Ce1lnGyJYmL6AHopScTA", authDomain: "social-media-5e6c8.firebaseapp.com", databaseURL: "https://social-media-5e6c8-default-rtdb.firebaseio.com/", projectId: "social-media-5e6c8" };
     firebase.initializeApp(firebaseConfig);
-    const auth = firebase.auth();
-    const db = firebase.database();
+    const db = firebase.database(), auth = firebase.auth();
+    
     let myUid = "";
 
-    // 🟢 ৩ মিনিট অনলাইন থাকার লজিক (রিলোড ছাড়া কাজ করবে)
-    function syncStatus() {
-        if(!myUid) return;
-        db.ref(`status/${myUid}`).set({ 
-            state: 'online', 
-            last: Date.now() + 180000 
+    // Presence Logic (Immediate Offline on Close)
+    function managePresence(uid) {
+        const statusRef = db.ref(`status/${uid}`);
+        db.ref('.info/connected').on('value', snap => {
+            if (snap.val() === true) {
+                statusRef.set({ state: 'online', last: Date.now() });
+                statusRef.onDisconnect().set({ state: 'offline', last: Date.now() });
+            }
         });
     }
 
-    auth.onAuthStateChanged((user) => {
+    // Smart Notification Logic (Firebase-Saved Tracking)
+    function listenNotifications(uid) {
+        db.ref('chats').on('child_added', snap => {
+            if (snap.key.includes(uid)) {
+                db.ref(`chats/${snap.key}`).limitToLast(1).on('child_added', async mSnap => {
+                    const m = mSnap.val();
+                    const msgId = mSnap.key;
+                    
+                    if (m.senderId !== uid) {
+                        // Check Firebase if this specific message was already shown to the user
+                        const checkRef = db.ref(`user-info/${uid}/seen_notifications/${msgId}`);
+                        const checkSnap = await checkRef.once('value');
+
+                        if (!checkSnap.exists()) {
+                            // Mark as shown in Firebase immediately
+                            checkRef.set(true);
+
+                            const uSnap = await db.ref(`user-info/${m.senderId}/profile`).once('value');
+                            const user = uSnap.val() || {};
+                            
+                            document.getElementById('notifSound').play().catch(() => {});
+                            showPopup(user.fullName || "New Message", m.text, user.profilePic, m.senderId);
+                        }
+                    }
+                });
+            }
+        });
+    }
+
+    let activeSenderId = "";
+    function showPopup(name, msg, pic, sid) {
+        activeSenderId = sid;
+        document.getElementById('notifName').innerText = name;
+        document.getElementById('notifMsg').innerText = msg;
+        document.getElementById('notifImg').src = pic || 'https://ui-avatars.com/api/?name=' + name;
+        
+        const pop = document.getElementById('pushNotification');
+        pop.classList.add('show');
+        setTimeout(() => { pop.classList.remove('show'); }, 5000);
+    }
+
+    function goToChat() {
+        if(activeSenderId) {
+            document.getElementById('contentFrame').src = `chat.html?uid=${activeSenderId}`;
+            document.getElementById('pushNotification').classList.remove('show');
+        }
+    }
+
+    auth.onAuthStateChanged(user => {
         if (user) {
             myUid = user.uid;
-            syncStatus();
-            setInterval(syncStatus, 60000); // প্রতি ১ মিনিটে আপডেট হবে
+            managePresence(user.uid);
+            listenNotifications(user.uid);
 
-            // 🚫 রিয়েল-টাইম ব্লক চেক
-            db.ref('user-info/' + user.uid).on('value', (snapshot) => {
-                const userData = snapshot.val();
-                if (userData) {
-                    if (userData.profile?.status === 'blocked' || userData.isBlocked === true) {
-                        window.location.href = "error.html";
-                        return;
-                    }
-                    
-                    if (userData.profile) {
-                        document.getElementById('userNameDisplay').innerText = userData.profile.fullName || "User";
-                        const avatarUrl = userData.profile.profilePic || `https://ui-avatars.com/api/?name=${userData.profile.fullName}&background=random&color=fff`;
-                        document.getElementById('userAvatar').src = avatarUrl;
-                    }
+            db.ref('user-info/' + user.uid).on('value', snap => {
+                const data = snap.val();
+                if (data?.profile) {
+                    document.getElementById('userNameDisplay').innerText = data.profile.fullName;
+                    document.getElementById('userAvatar').src = data.profile.profilePic || `https://ui-avatars.com/api/?name=${data.profile.fullName}`;
                 }
             });
-        } else {
-            window.location.href = "login.html";
-        }
+        } else { window.location.href = "login.html"; }
     });
 
-    // সাইডবার কন্ট্রোল
+    // Sidebar & UI Controls
     const sidebar = document.getElementById('sidebar');
     const overlay = document.getElementById('overlay');
     const mobileToggle = document.getElementById('mobile-toggle');
@@ -183,32 +225,19 @@
         overlay.classList.toggle('hidden');
     }
 
-    document.querySelectorAll('.nav-link').forEach(link => {
-        link.addEventListener('click', (e) => {
-            // লিঙ্কে ক্লিক করলে নীল রঙ পরিবর্তন হবে (Active State)
-            document.querySelectorAll('.nav-link').forEach(l => {
-                l.classList.remove('text-blue-600', 'bg-blue-50');
-                l.classList.add('text-gray-600');
-            });
-            link.classList.add('text-blue-600', 'bg-blue-50');
-            link.classList.remove('text-gray-600');
+    mobileToggle.onclick = toggleSidebar;
+    overlay.onclick = toggleSidebar;
 
-            if (window.innerWidth < 1024) toggleSidebar();
-        });
+    // Auto-close sidebar on mobile after clicking link
+    document.querySelectorAll('.nav-link').forEach(link => {
+        link.onclick = () => { if (window.innerWidth < 1024) toggleSidebar(); };
     });
 
-    mobileToggle.addEventListener('click', toggleSidebar);
-    overlay.addEventListener('click', toggleSidebar);
-
     function logout() {
-        auth.signOut().then(() => {
-            window.location.href = "login.html";
+        db.ref(`status/${myUid}`).set({ state: 'offline', last: Date.now() }).then(() => {
+            auth.signOut().then(() => window.location.href = "login.html");
         });
     }
-
-    window.onload = () => {
-        if (window.innerWidth < 1024) sidebar.classList.add('closed');
-    };
 </script>
 </body>
 </html>
