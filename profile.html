@@ -220,7 +220,7 @@
     function renderButtons(uid) {
         const div = document.getElementById('profileActions');
         if (uid === myUid) {
-            div.innerHTML = `<button onclick="location.href='settings.html'" class="bg-[#e4e6eb] text-black px-10 py-2 rounded-lg font-bold text-sm">Edit Profile</button>`;
+            div.innerHTML = `<button onclick="location.href='editprofile.html'" class="bg-[#e4e6eb] text-black px-10 py-2 rounded-lg font-bold text-sm">Edit Profile</button>`;
         } else {
             db.ref(`user-following/${myUid}/${uid}`).on('value', s => {
                 const isF = s.exists();
