@@ -9,6 +9,29 @@
     
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
+    
+    <style>
+        /* ইউজার টেক্সট সিলেক্ট করতে পারবে না */
+        body {
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+    </style>
+    
+    <script>
+        // 🛡️ Security: Disable Right Click
+        document.addEventListener('contextmenu', e => e.preventDefault());
+        
+        // 🛡️ Security: Disable Inspect Shortcuts
+        document.onkeydown = function(e) {
+            // F12, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+U
+            if (e.keyCode == 123 ||
+                (e.ctrlKey && e.shiftKey && (e.keyCode == 'I'.charCodeAt(0) || e.keyCode == 'J'.charCodeAt(0) || e.keyCode == 'C'.charCodeAt(0))) ||
+                (e.ctrlKey && e.keyCode == 'U'.charCodeAt(0))) {
+                return false;
+            }
+        };
+    </script>
 </head>
 
 <body class="bg-gray-50 flex items-center justify-center min-h-screen p-4">
@@ -49,17 +72,16 @@
     <script>
         // --- 1. Firebase Configuration ---
         const firebaseConfig = {
-  apiKey: "AIzaSyD1mn9MR9hyZ36Ce1lnGyJYmL6AHopScTA",
-  authDomain: "social-media-5e6c8.firebaseapp.com",
-  databaseURL: "https://social-media-5e6c8-default-rtdb.firebaseio.com/",
-  projectId: "social-media-5e6c8",
-  storageBucket: "social-media-5e6c8.firebasestorage.app",
-  messagingSenderId: "897473713729",
-  appId: "1:897473713729:web:7ba552ed4c1be8754418c0",
-  measurementId: "G-7JJTYPSX5P"
-};
+            apiKey: "AIzaSyD1mn9MR9hyZ36Ce1lnGyJYmL6AHopScTA",
+            authDomain: "social-media-5e6c8.firebaseapp.com",
+            databaseURL: "https://social-media-5e6c8-default-rtdb.firebaseio.com/",
+            projectId: "social-media-5e6c8",
+            storageBucket: "social-media-5e6c8.firebasestorage.app",
+            messagingSenderId: "897473713729",
+            appId: "1:897473713729:web:7ba552ed4c1be8754418c0",
+            measurementId: "G-7JJTYPSX5P"
+        };
         
-        // Initialize Firebase
         firebase.initializeApp(firebaseConfig);
         const auth = firebase.auth();
         
@@ -71,7 +93,6 @@
         loginForm.addEventListener('submit', (e) => {
             e.preventDefault();
             
-            // UI Feedback
             btnText.innerText = "Authenticating...";
             loginBtn.disabled = true;
             loginBtn.classList.replace('bg-blue-600', 'bg-blue-400');
@@ -79,14 +100,11 @@
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
             
-            // Firebase Auth Sign In
             auth.signInWithEmailAndPassword(email, password)
                 .then((userCredential) => {
-                    // Success
                     window.location.href = "account.html";
                 })
                 .catch((error) => {
-                    // Error Handling
                     alert("Login Failed: " + error.message);
                     btnText.innerText = "Login to Account";
                     loginBtn.disabled = false;
