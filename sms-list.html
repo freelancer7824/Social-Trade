@@ -100,34 +100,45 @@
         else { window.parent.location.href = "login.html"; }
     });
 
-    function loadChats() {
-        db.ref('chats').on('value', async snap => {
-            const allChats = snap.val() || {};
-            const myChatKeys = Object.keys(allChats).filter(key => key.includes(myUid));
-            if (myChatKeys.length === 0) {
-                document.getElementById('chatList').innerHTML = `<p class="p-10 text-center text-gray-400">No messages found</p>`;
-                return;
+    // আপনার loadChats ফাংশনের ভেতর এই লজিকটি আপডেট করা হয়েছে
+function loadChats() {
+    db.ref('chats').on('value', async snap => {
+        const allChats = snap.val() || {};
+        const myChatKeys = Object.keys(allChats).filter(key => key.includes(myUid));
+        
+        if (myChatKeys.length === 0) {
+            document.getElementById('chatList').innerHTML = `<p class="p-10 text-center text-gray-400">No messages found</p>`;
+            return;
+        }
+
+        const chatPromises = myChatKeys.map(async key => {
+            const messages = Object.values(allChats[key]);
+            const lastMsg = messages[messages.length - 1];
+            const otherUid = key.replace(myUid, "").replace("_", "");
+            const uSnap = await db.ref(`user-info/${otherUid}/profile`).once('value');
+            const profile = uSnap.val() || {};
+
+            // ইমেজ চেক করার লজিক
+            let displayText = lastMsg ? lastMsg.text : "";
+            if (lastMsg && lastMsg.type === 'image') {
+                displayText = "📷 Photo"; 
             }
-            const chatPromises = myChatKeys.map(async key => {
-                const messages = Object.values(allChats[key]);
-                const lastMsg = messages[messages.length - 1];
-                const otherUid = key.replace(myUid, "").replace("_", "");
-                const uSnap = await db.ref(`user-info/${otherUid}/profile`).once('value');
-                const profile = uSnap.val() || {};
-                return {
-                    chatKey: key, uid: otherUid,
-                    name: profile.fullName || "User",
-                    pic: profile.profilePic,
-                    isVerified: profile.isVerified === true || profile.isVerified === "true",
-                    text: lastMsg ? lastMsg.text : "",
-                    time: lastMsg ? lastMsg.timestamp : 0
-                };
-            });
-            allChatData = await Promise.all(chatPromises);
-            allChatData.sort((a, b) => b.time - a.time);
-            renderChatList(allChatData);
+
+            return {
+                chatKey: key, uid: otherUid,
+                name: profile.fullName || "User",
+                pic: profile.profilePic,
+                isVerified: profile.isVerified === true || profile.isVerified === "true",
+                text: displayText, // এখানে আপডেট করা টেক্সট যাচ্ছে
+                time: lastMsg ? lastMsg.timestamp : 0
+            };
         });
-    }
+
+        allChatData = await Promise.all(chatPromises);
+        allChatData.sort((a, b) => b.time - a.time);
+        renderChatList(allChatData);
+    });
+}
 
     function renderChatList(chats) {
         const chatListDiv = document.getElementById('chatList');
