@@ -151,6 +151,7 @@
     }
 
     // Smart Notification Logic (Firebase-Saved Tracking)
+    // Smart Notification Logic (Updated for Image support)
     function listenNotifications(uid) {
         db.ref('chats').on('child_added', snap => {
             if (snap.key.includes(uid)) {
@@ -159,19 +160,25 @@
                     const msgId = mSnap.key;
                     
                     if (m.senderId !== uid) {
-                        // Check Firebase if this specific message was already shown to the user
                         const checkRef = db.ref(`user-info/${uid}/seen_notifications/${msgId}`);
                         const checkSnap = await checkRef.once('value');
 
                         if (!checkSnap.exists()) {
-                            // Mark as shown in Firebase immediately
                             checkRef.set(true);
 
                             const uSnap = await db.ref(`user-info/${m.senderId}/profile`).once('value');
                             const user = uSnap.val() || {};
                             
+                            // ইমেজ মেসেজ চেক করার কন্ডিশন
+                            let notificationText = m.text;
+                            if (m.type === 'image') {
+                                notificationText = "📷 Sent a photo";
+                            }
+                            
                             document.getElementById('notifSound').play().catch(() => {});
-                            showPopup(user.fullName || "New Message", m.text, user.profilePic, m.senderId);
+                            
+                            // পপআপ ফাংশনে টেক্সটটি পাঠানো হচ্ছে
+                            showPopup(user.fullName || "New Message", notificationText, user.profilePic, m.senderId);
                         }
                     }
                 });
@@ -183,7 +190,7 @@
     function showPopup(name, msg, pic, sid) {
         activeSenderId = sid;
         document.getElementById('notifName').innerText = name;
-        document.getElementById('notifMsg').innerText = msg;
+        document.getElementById('notifMsg').innerText = msg; // এখানে এখন "Sent a photo" দেখাবে
         document.getElementById('notifImg').src = pic || 'https://ui-avatars.com/api/?name=' + name;
         
         const pop = document.getElementById('pushNotification');
