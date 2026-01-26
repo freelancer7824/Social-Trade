@@ -20,11 +20,15 @@
         .comment-bubble { background: #f0f2f5; border-radius: 15px; padding: 7px 12px; max-width: 85%; }
         .status-indicator { position: absolute; bottom: 8px; right: 8px; width: 16px; height: 16px; border-radius: 50%; border: 3px solid white; background: #ccc; }
         .status-online { background: #31a24c; }
-        /* Cover photo smooth display */
         #coverImg { transition: opacity 0.3s ease-in; }
+        
+        /* Facebook Style Follower Section */
+        .stat-text { color: #65676b; font-weight: 500; font-size: 13px; margin-left: 3px; }
+        .purple-dot { color: #8B5CF6; font-weight: 900; margin: 0 8px; font-size: 14px; }
+        .count-num { color: #050505; font-weight: 700; font-size: 14px; }
     </style>
 </head>
-<body class="pb-10">
+<body class="pb-10" oncontextmenu="return false;">
 
     <div id="profileWrapper" class="max-w-[500px] mx-auto">
         <div class="bg-white border-b pb-4 shadow-sm">
@@ -39,8 +43,20 @@
                     <div id="activeDot" class="status-indicator"></div>
                 </div>
                 <h2 id="userName" class="text-xl font-bold mt-2 flex items-center justify-center">Loading...</h2>
-                <p id="statusText" class="text-[10px] font-bold uppercase mb-1 text-gray-400">Offline</p>
-                <p id="followerDisplay" class="text-[#1877F2] font-bold text-sm">0 Followers</p>
+                <p id="statusText" class="text-[10px] font-bold uppercase mb-2 text-gray-400">Offline</p>
+                
+                <div class="flex items-center justify-center mb-1">
+                    <div>
+                        <span id="fCount" class="count-num">0</span>
+                        <span class="stat-text">followers</span>
+                    </div>
+                    <span class="purple-dot">•</span>
+                    <div>
+                        <span id="followingCount" class="count-num">0</span>
+                        <span class="stat-text">following</span>
+                    </div>
+                </div>
+
                 <p id="userBio" class="text-gray-500 text-sm italic mt-1">...</p>
                 <div id="profileActions" class="flex gap-2 mt-4 justify-center"></div>
             </div>
@@ -53,6 +69,13 @@
     </div>
 
 <script>
+    // --- Security: Prevent Inspect Element ---
+    document.addEventListener('keydown', function(e) {
+        if (e.key === "F12" || (e.ctrlKey && e.shiftKey && (e.key === "I" || e.key === "J" || e.key === "C")) || (e.ctrlKey && e.key === "u")) {
+            e.preventDefault(); return false;
+        }
+    });
+
     const firebaseConfig = { apiKey: "AIzaSyD1mn9MR9hyZ36Ce1lnGyJYmL6AHopScTA", authDomain: "social-media-5e6c8.firebaseapp.com", databaseURL: "https://social-media-5e6c8-default-rtdb.firebaseio.com/", projectId: "social-media-5e6c8" };
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database(), auth = firebase.auth();
@@ -60,6 +83,12 @@
     const blueBadge = `<svg class="inline-block w-4 h-4 ml-1 text-[#1877F2]" viewBox="0 0 24 24" fill="currentColor"><path d="M23 12l-2.44-2.79.34-3.69-3.61-.82-1.89-3.2L12 2.96 8.6 1.5 6.71 4.7l-3.61.81.34 3.7L1 12l2.44 2.79-.34 3.69 3.61.82 1.89 3.2L12 21.04l3.4 1.46 1.89-3.2 3.61-.82-.34-3.69L23 12zm-12.91 4.72l-3.8-3.81 1.48-1.48 2.32 2.33 5.85-5.87 1.48 1.48-7.33 7.35z"/></svg>`;
     
     let targetUid = new URLSearchParams(window.location.search).get('uid'), myUid = "", userCache = {}, openComments = {};
+
+    function formatFollowers(num) {
+        if (num >= 1000000) return (num / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+        if (num >= 1000) return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+        return num;
+    }
 
     function timeAgo(ts) {
         if(!ts) return "";
@@ -89,27 +118,25 @@
         db.ref(`user-info/${uid}/profile`).on('value', snap => {
             const d = snap.val() || {};
             const isV = d.isVerified === true || d.isVerified === "true";
-            
-            // Name & Verification
             document.getElementById('userName').innerHTML = (d.fullName || "User") + (isV ? blueBadge : "");
-            
-            // Profile Photo
             document.getElementById('userPic').src = d.profilePic || `https://ui-avatars.com/api/?name=${d.fullName}`;
             
-            // Cover Photo Logic Updated
             const coverEl = document.getElementById('coverImg');
-            if(d.coverPic) {
-                coverEl.src = d.coverPic;
-                coverEl.classList.remove('hidden');
-            } else {
-                coverEl.classList.add('hidden');
-            }
+            if(d.coverPic) { coverEl.src = d.coverPic; coverEl.classList.remove('hidden'); } 
+            else { coverEl.classList.add('hidden'); }
 
             document.getElementById('userBio').innerText = d.bio || "No bio available";
             renderButtons(uid);
         });
+
+        // Load Followers
         db.ref(`user-followers/${uid}`).on('value', s => {
-            document.getElementById('followerDisplay').innerText = `${s.numChildren()} Followers`;
+            document.getElementById('fCount').innerText = formatFollowers(s.numChildren());
+        });
+
+        // Load Following
+        db.ref(`user-following/${uid}`).on('value', s => {
+            document.getElementById('followingCount').innerText = formatFollowers(s.numChildren());
         });
     }
 
@@ -132,8 +159,7 @@
             const isVAuthor = author.isVerified === true || author.isVerified === "true";
             const isHidden = openComments[post.id] ? '' : 'hidden';
 
-            return `
-            <div class="post-card">
+            return `<div class="post-card">
                 <div class="p-3 flex items-center justify-between border-b mx-1">
                     <div class="flex items-center gap-2">
                         <img src="${author.profilePic || 'https://ui-avatars.com/api/?name='+author.fullName}" class="w-9 h-9 rounded-full">
@@ -144,9 +170,7 @@
                     </div>
                     ${post.uid === myUid ? `<button onclick="deletePost('${post.id}')" class="text-gray-300 p-2"><i class="fas fa-trash-alt"></i></button>` : ''}
                 </div>
-                <div class="${post.background && post.background !== 'none' ? 'colored-content' : 'px-4 py-3 text-sm'}" style="background: ${post.background || 'transparent'}">
-                    ${post.text}
-                </div>
+                <div class="${post.background && post.background !== 'none' ? 'colored-content' : 'px-4 py-3 text-sm'}" style="background: ${post.background || 'transparent'}">${post.text}</div>
                 <div class="px-4 py-2 flex justify-between text-gray-500 text-[11px] border-b mx-2">
                     <span><i class="fas fa-thumbs-up text-blue-500"></i> ${likes}</span>
                     <span onclick="toggleBox('${post.id}')" class="cursor-pointer hover:underline">${comments} comments</span>
@@ -171,8 +195,7 @@
         return Object.values(comments).sort((a,b)=>b.timestamp - a.timestamp).map(c => {
             const u = userCache[c.uid] || {fullName: "User"};
             const isV = u.isVerified === true || u.isVerified === "true";
-            return `
-            <div class="flex gap-2">
+            return `<div class="flex gap-2">
                 <img src="${u.profilePic || 'https://ui-avatars.com/api/?name='+u.fullName}" class="w-7 h-7 rounded-full cursor-pointer" onclick="location.href='profile.html?uid=${c.uid}'">
                 <div class="comment-bubble" onclick="location.href='profile.html?uid=${c.uid}'">
                     <p class="text-[10px] font-bold">${u.fullName || 'User'}${isV ? blueBadge : ""}</p>
