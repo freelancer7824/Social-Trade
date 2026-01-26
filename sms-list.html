@@ -19,25 +19,53 @@
             box-shadow: 0 0 5px rgba(34, 197, 94, 0.5);
         }
         .chat-item:active { background-color: #f9fafb; }
-        .search-container { position: sticky; top: 0; background: white; z-index: 50; padding: 12px; border-bottom: 1px solid #f3f4f6; }
-        .v-badge { width: 15px; height: 15px; display: inline-block; }
+        .search-container { position: sticky; top: 0; background: white; z-index: 50; padding: 12px; border-bottom: 1px solid #f3f4f6; transition: 0.3s; }
+        
+        /* Selection Styles */
+        .selected-item { background-color: #eff6ff !important; }
+        .checkbox-custom { width: 22px; height: 22px; border: 2px solid #cbd5e1; border-radius: 50%; display: none; transition: 0.2s; }
+        .selection-mode .checkbox-custom { display: flex; align-items: center; justify-content: center; margin-right: 10px; }
+        .selected-item .checkbox-custom { background: #3b82f6; border-color: #3b82f6; }
+        .selected-item .checkbox-custom::after { content: "\f00c"; font-family: "Font Awesome 5 Free"; font-weight: 900; color: white; font-size: 10px; }
+        
+        #deleteHeader { display: none; position: fixed; top: 0; left: 0; width: 100%; background: #1f2937; color: white; z-index: 100; padding: 15px 20px; align-items: center; justify-content: space-between; animation: slideDown 0.3s ease; }
+        @keyframes slideDown { from { transform: translateY(-100%); } to { transform: translateY(0); } }
     </style>
 
     <script>
-        // 🔒 Security: Disable Inspect, Right Click & Shortcuts
-        document.addEventListener('contextmenu', e => e.preventDefault());
+        // 🛡️ ANTI-INSPECT LOGIC
+        document.addEventListener('contextmenu', e => e.preventDefault()); // Disable Right Click
+
         document.onkeydown = function(e) {
+            // Disable F12, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+U, Ctrl+Shift+C
             if (e.keyCode == 123 || 
-                (e.ctrlKey && e.shiftKey && (e.keyCode == 73 || e.keyCode == 67 || e.keyCode == 74)) || 
+                (e.ctrlKey && e.shiftKey && [73, 74, 67].includes(e.keyCode)) || 
                 (e.ctrlKey && e.keyCode == 85)) {
                 return false;
             }
         };
+
+        // Infinite Debugger: If someone opens console, it will pause the execution
+        setInterval(function() {
+            (function() {
+                return false;
+            }['constructor']('debugger')());
+        }, 100);
     </script>
 </head>
 <body class="bg-white min-h-screen">
 
-    <div class="search-container">
+    <div id="deleteHeader">
+        <div class="flex items-center gap-5">
+            <button onclick="exitSelectionMode()" class="p-1"><i class="fas fa-times text-xl"></i></button>
+            <span id="selectedCount" class="font-semibold text-lg">1 selected</span>
+        </div>
+        <button onclick="deleteSelectedChats()" class="text-red-400 font-bold text-sm uppercase tracking-wider">
+            <i class="fas fa-trash-alt mr-1"></i> Delete
+        </button>
+    </div>
+
+    <div class="search-container" id="searchBox">
         <div class="relative flex items-center bg-gray-100 rounded-xl px-4 py-2.5">
             <i class="fas fa-search text-gray-400 mr-3"></i>
             <input type="text" id="searchInput" oninput="filterChats()" placeholder="Search messages..." class="bg-transparent outline-none text-sm w-full font-medium text-gray-700">
@@ -62,46 +90,39 @@
 
     let myUid = "";
     let allChatData = [];
+    let selectedChats = new Set();
+    let isSelectionMode = false;
 
-    const blueBadgeSvg = `<svg class="v-badge" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5213 2.62368C11.3147 1.75255 12.6853 1.75255 13.4787 2.62368L14.4989 3.74391C14.8326 4.11041 15.3059 4.30642 15.8039 4.28394L17.3255 4.21526C18.5089 4.16179 19.5041 5.15705 19.4506 6.34045L19.3819 7.86208C19.3595 8.36012 19.5555 8.83342 19.922 9.16713L21.0422 10.1873C21.9133 10.9807 21.9133 12.3513 21.0422 13.1447L19.922 14.1649C19.5555 14.4986 19.3595 14.9719 19.3819 15.4699L19.4506 16.9915C19.5041 18.1749 18.5089 19.1702 17.3255 19.1167L15.8039 19.048C15.3059 19.0255 14.8326 19.2216 14.4989 19.5881L13.4787 20.7083C12.6853 21.5794 11.3147 21.5794 10.5213 20.7083L9.50106 19.5881C9.16735 19.2216 8.69405 19.0255 8.19601 19.048L6.67442 19.1167C5.49103 19.1702 4.49577 18.1749 4.54924 16.9915L4.61792 15.4699C4.6404 14.9719 4.44439 14.4986 4.07789 14.1649L2.95771 13.1447C2.08658 12.3513 2.08658 10.9807 2.95771 10.1873L4.07789 9.16713C4.44439 8.83342 4.6404 8.36012 4.61792 7.86208L4.54924 6.34045C4.49577 5.15705 5.49103 4.16179 6.67442 4.21526L8.19601 4.28394C8.69405 4.30642 9.16735 4.11041 9.50106 3.74391L10.5213 2.62368Z" fill="#1D9BF0"/><path d="M10 12.5L11.5 14L15 10.5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    const blueBadgeSvg = `<svg style="width:15px; height:15px; display:inline-block;" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5213 2.62368C11.3147 1.75255 12.6853 1.75255 13.4787 2.62368L14.4989 3.74391C14.8326 4.11041 15.3059 4.30642 15.8039 4.28394L17.3255 4.21526C18.5089 4.16179 19.5041 5.15705 19.4506 6.34045L19.3819 7.86208C19.3595 8.36012 19.5555 8.83342 19.922 9.16713L21.0422 10.1873C21.9133 10.9807 21.9133 12.3513 21.0422 13.1447L19.922 14.1649C19.5555 14.4986 19.3595 14.9719 19.3819 15.4699L19.4506 16.9915C19.5041 18.1749 18.5089 19.1702 17.3255 19.1167L15.8039 19.048C15.3059 19.0255 14.8326 19.2216 14.4989 19.5881L13.4787 20.7083C12.6853 21.5794 11.3147 21.5794 10.5213 20.7083L9.50106 19.5881C9.16735 19.2216 8.69405 19.0255 8.19601 19.048L6.67442 19.1167C5.49103 19.1702 4.49577 18.1749 4.54924 16.9915L4.61792 15.4699C4.6404 14.9719 4.44439 14.4986 4.07789 14.1649L2.95771 13.1447C2.08658 12.3513 2.08658 10.9807 2.95771 10.1873L4.07789 9.16713C4.44439 8.83342 4.6404 8.36012 4.61792 7.86208L4.54924 6.34045C4.49577 5.15705 5.49103 4.16179 6.67442 4.21526L8.19601 4.28394C8.69405 4.30642 9.16735 4.11041 9.50106 3.74391L10.5213 2.62368Z" fill="#1D9BF0"/><path d="M10 12.5L11.5 14L15 10.5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
     auth.onAuthStateChanged(user => {
-        if (user) {
-            myUid = user.uid;
-            loadChats();
-        } else {
-            window.parent.location.href = "login.html";
-        }
+        if (user) { myUid = user.uid; loadChats(); } 
+        else { window.parent.location.href = "login.html"; }
     });
 
     function loadChats() {
         db.ref('chats').on('value', async snap => {
             const allChats = snap.val() || {};
             const myChatKeys = Object.keys(allChats).filter(key => key.includes(myUid));
-            
             if (myChatKeys.length === 0) {
                 document.getElementById('chatList').innerHTML = `<p class="p-10 text-center text-gray-400">No messages found</p>`;
                 return;
             }
-
             const chatPromises = myChatKeys.map(async key => {
                 const messages = Object.values(allChats[key]);
                 const lastMsg = messages[messages.length - 1];
                 const otherUid = key.replace(myUid, "").replace("_", "");
-
                 const uSnap = await db.ref(`user-info/${otherUid}/profile`).once('value');
                 const profile = uSnap.val() || {};
-
                 return {
-                    uid: otherUid,
+                    chatKey: key, uid: otherUid,
                     name: profile.fullName || "User",
                     pic: profile.profilePic,
                     isVerified: profile.isVerified === true || profile.isVerified === "true",
-                    text: lastMsg.text,
-                    time: lastMsg.timestamp
+                    text: lastMsg ? lastMsg.text : "",
+                    time: lastMsg ? lastMsg.timestamp : 0
                 };
             });
-
             allChatData = await Promise.all(chatPromises);
             allChatData.sort((a, b) => b.time - a.time);
             renderChatList(allChatData);
@@ -111,20 +132,32 @@
     function renderChatList(chats) {
         const chatListDiv = document.getElementById('chatList');
         chatListDiv.innerHTML = "";
-
         chats.forEach(chat => {
             const chatEl = document.createElement('div');
-            chatEl.className = "chat-item flex items-center gap-4 p-4 cursor-pointer transition";
-            chatEl.onclick = () => window.location.href = `chat.html?uid=${chat.uid}`;
+            chatEl.id = `chat_${chat.chatKey}`;
+            chatEl.className = "chat-item flex items-center p-4 cursor-pointer transition";
             
-            const timeStr = new Date(chat.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            let timer;
+            chatEl.onmousedown = chatEl.ontouchstart = (e) => {
+                if (isSelectionMode) return;
+                timer = setTimeout(() => enterSelectionMode(chat.chatKey), 800);
+            };
+            chatEl.onmouseup = chatEl.ontouchend = chatEl.onmouseleave = () => clearTimeout(timer);
+
+            chatEl.onclick = () => {
+                if (isSelectionMode) toggleSelect(chat.chatKey);
+                else window.location.href = `chat.html?uid=${chat.uid}`;
+            };
+            
+            const timeStr = chat.time ? new Date(chat.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "";
 
             chatEl.innerHTML = `
+                <div class="checkbox-custom flex-shrink-0"></div>
                 <div class="relative flex-shrink-0">
                     <img src="${chat.pic || 'https://ui-avatars.com/api/?name=' + chat.name}" class="w-14 h-14 rounded-full object-cover border border-gray-100">
                     <div id="status_${chat.uid}" class="hidden"></div>
                 </div>
-                <div class="flex-1 min-w-0">
+                <div class="flex-1 min-w-0 ml-3">
                     <div class="flex justify-between items-center mb-0.5">
                         <div class="flex items-center gap-1 min-w-0">
                             <h3 class="font-bold text-gray-900 truncate">${chat.name}</h3>
@@ -136,27 +169,68 @@
                 </div>
             `;
             chatListDiv.appendChild(chatEl);
+            updateStatus(chat.uid);
+        });
+    }
 
-            db.ref(`status/${chat.uid}`).on('value', sSnap => {
-                const status = sSnap.val();
-                const statusDot = document.getElementById(`status_${chat.uid}`);
-                if (statusDot) {
-                    if (status && status.state === 'online') {
-                        statusDot.className = "active-dot";
-                        statusDot.classList.remove('hidden');
-                    } else {
-                        statusDot.classList.add('hidden');
-                    }
+    function enterSelectionMode(firstKey) {
+        isSelectionMode = true;
+        document.getElementById('chatList').classList.add('selection-mode');
+        document.getElementById('deleteHeader').style.display = 'flex';
+        document.getElementById('searchBox').style.opacity = '0';
+        toggleSelect(firstKey);
+    }
+
+    function exitSelectionMode() {
+        isSelectionMode = false;
+        selectedChats.clear();
+        document.getElementById('chatList').classList.remove('selection-mode');
+        document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('selected-item'));
+        document.getElementById('deleteHeader').style.display = 'none';
+        document.getElementById('searchBox').style.opacity = '1';
+    }
+
+    function toggleSelect(key) {
+        const el = document.getElementById(`chat_${key}`);
+        if (selectedChats.has(key)) {
+            selectedChats.delete(key);
+            el.classList.remove('selected-item');
+        } else {
+            selectedChats.add(key);
+            el.classList.add('selected-item');
+        }
+        document.getElementById('selectedCount').innerText = `${selectedChats.size} selected`;
+        if (selectedChats.size === 0) exitSelectionMode();
+    }
+
+    async function deleteSelectedChats() {
+        if (confirm(`Delete ${selectedChats.size} chat(s) permanently?`)) {
+            const updates = {};
+            selectedChats.forEach(key => updates[`/chats/${key}`] = null);
+            await db.ref().update(updates);
+            exitSelectionMode();
+        }
+    }
+
+    function updateStatus(uid) {
+        db.ref(`status/${uid}`).on('value', sSnap => {
+            const status = sSnap.val();
+            const statusDot = document.getElementById(`status_${uid}`);
+            if (statusDot) {
+                if (status && status.state === 'online') {
+                    statusDot.className = "active-dot";
+                    statusDot.classList.remove('hidden');
+                } else {
+                    statusDot.classList.add('hidden');
                 }
-            });
+            }
         });
     }
 
     function filterChats() {
         const query = document.getElementById('searchInput').value.toLowerCase();
         const filtered = allChatData.filter(chat => 
-            chat.name.toLowerCase().includes(query) || 
-            chat.text.toLowerCase().includes(query)
+            chat.name.toLowerCase().includes(query) || chat.text.toLowerCase().includes(query)
         );
         renderChatList(filtered);
     }
