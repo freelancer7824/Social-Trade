@@ -143,82 +143,98 @@
         }
 
         // --- Voice Logic Start ---
-        async function toggleRecording() {
-            if (!isRecording) {
-                try {
-                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                    startRecording(stream);
-                } catch (err) {
-                    alert("Microphone permission denied!");
-                }
-            } else {
-                stopAndSend();
-            }
+        // ... (আগের CSS এবং HTML অপরিবর্তিত থাকবে, শুধু স্ক্রিপ্ট নিচের অংশটুকু পরিবর্তন করুন)
+
+async function toggleRecording() {
+    if (!isRecording) {
+        try {
+            // ইউজারের পারমিশন চেক এবং রেকর্ডিং শুরু
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            startRecording(stream);
+        } catch (err) {
+            alert("Microphone permission denied! Please enable it in settings.");
         }
+    } else {
+        // রেকর্ডিং চলাকালীন আবার ক্লিক করলে বন্ধ হবে এবং সেন্ড হবে
+        stopAndSend();
+    }
+}
 
-        function startRecording(stream) {
-            mediaRecorder = new MediaRecorder(stream);
-            audioChunks = [];
-            isRecording = true;
-            seconds = 0;
-            
-            mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
-            mediaRecorder.onstop = async () => {
-                if (audioChunks.length > 0 && isRecording) {
-                    const audioBlob = new Blob(audioChunks, { type: 'audio/mp3' });
-                    uploadAudio(audioBlob);
-                }
-                stream.getTracks().forEach(track => track.stop());
-            };
-
-            mediaRecorder.start();
-            document.getElementById('voiceStatus').classList.remove('hidden');
-            document.getElementById('voiceBtn').classList.add('recording-active');
-            
-            timerInterval = setInterval(() => {
-                seconds++;
-                document.getElementById('timer').innerText = seconds + "s";
-                if (seconds >= 60) stopAndSend();
-            }, 1000);
+function startRecording(stream) {
+    mediaRecorder = new MediaRecorder(stream);
+    audioChunks = [];
+    isRecording = true;
+    seconds = 0;
+    
+    mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+    mediaRecorder.onstop = async () => {
+        // যদি ক্যানসেল করা না হয়, তবেই আপলোড হবে
+        if (audioChunks.length > 0 && isRecording === false && shouldUpload === true) {
+            const audioBlob = new Blob(audioChunks, { type: 'audio/mp3' });
+            uploadAudio(audioBlob);
         }
+        stream.getTracks().forEach(track => track.stop());
+    };
+    
+    mediaRecorder.start();
+    document.getElementById('voiceStatus').classList.remove('hidden');
+    document.getElementById('voiceBtn').classList.add('recording-active');
+    shouldUpload = true; // ফ্ল্যাগ সেট করা হলো
+    
+    timerInterval = setInterval(() => {
+        seconds++;
+        document.getElementById('timer').innerText = seconds + "s";
+        if (seconds >= 60) stopAndSend(); // ১ মিনিট পর অটো স্টপ
+    }, 1000);
+}
 
-        function stopAndSend() {
-            if (!isRecording) return;
-            mediaRecorder.stop();
-            resetUI();
-        }
+// গ্লোবাল ভেরিয়েবল
+let shouldUpload = false;
 
-        function stopAndCancel() {
-            isRecording = false; // Prevents the onstop from uploading
-            mediaRecorder.stop();
-            resetUI();
-        }
+function stopAndSend() {
+    if (!isRecording) return;
+    shouldUpload = true;
+    isRecording = false; // flag change before stop
+    mediaRecorder.stop();
+    resetUI();
+}
 
-        function resetUI() {
-            clearInterval(timerInterval);
-            isRecording = false;
-            document.getElementById('voiceStatus').classList.add('hidden');
-            document.getElementById('voiceBtn').classList.remove('recording-active');
-        }
+function stopAndCancel() {
+    shouldUpload = false;
+    isRecording = false;
+    mediaRecorder.stop();
+    resetUI();
+}
 
-        async function uploadAudio(blob) {
-            const formData = new FormData();
-            formData.append("file", blob);
-            formData.append("upload_preset", CLOUDINARY_PRESET);
+function resetUI() {
+    clearInterval(timerInterval);
+    document.getElementById('voiceStatus').classList.add('hidden');
+    document.getElementById('voiceBtn').classList.remove('recording-active');
+}
 
-            try {
-                const res = await fetch(CLOUDINARY_URL, { method: "POST", body: formData });
-                const data = await res.json();
-                if (data.secure_url) {
-                    db.ref(`chats/${chatKey}`).push({ 
-                        senderId: myUid, 
-                        text: data.secure_url, 
-                        type: 'voice', 
-                        timestamp: Date.now() 
-                    });
-                }
-            } catch (e) { console.error("Upload failed", e); }
-        }
+// মূল Send Button এ এই লজিকটি যোগ করুন
+function sendMsg() {
+    const input = document.getElementById('msgInput');
+    const txt = input.value.trim();
+    
+    // যদি ভয়েস রেকর্ডিং চলতে থাকে, তবে সেন্ড বাটনে চাপ দিলে ভয়েস সেন্ড হবে
+    if (isRecording) {
+        stopAndSend();
+        return;
+    }
+    
+    // টেক্সট মেসেজ পাঠানোর জন্য
+    if (!txt) return;
+    db.ref(`chats/${chatKey}`).push({
+        senderId: myUid,
+        text: txt,
+        type: 'text',
+        timestamp: Date.now()
+    });
+    input.value = "";
+}
+
+// ... (বাকি আপলোড ফাংশন এবং ফায়ারবেস লজিক একই থাকবে)
         // --- Voice Logic End ---
 
         function openFullImage(url) {
