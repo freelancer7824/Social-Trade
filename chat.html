@@ -9,25 +9,52 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+    
     <style>
         body { user-select: none; -webkit-tap-highlight-color: transparent; background-color: #fff; overflow: hidden; font-family: sans-serif; }
         #messages::-webkit-scrollbar { width: 4px; }
         #messages::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
-        
         .img-container { width: 220px; height: 280px; border-radius: 18px; overflow: hidden; background: #f0f0f0; cursor: pointer; border: 1px solid #eee; }
         .img-container img { width: 100%; height: 100%; object-fit: cover; display: block; }
-
         #imgModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 9999; justify-content: center; align-items: center; }
         #imgModal img { max-width: 95%; max-height: 85%; border-radius: 8px; }
-
         .upload-loader { border: 2px solid #f3f3f3; border-top: 2px solid #3b82f6; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        
         .recording-active { color: #ef4444; animation: pulse 1.5s infinite; }
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
-        
         audio { height: 35px; max-width: 200px; border-radius: 20px; }
     </style>
+
+    <script>
+        // --- 🛡️ ADVANCED ANTI-INSPECT & PROTECTION ---
+        
+        // Disable Right Click
+        document.addEventListener('contextmenu', e => e.preventDefault());
+
+        // Disable Shortcuts (F12, Ctrl+Shift+I, Ctrl+U, etc.)
+        document.onkeydown = function(e) {
+            if (e.keyCode == 123 || 
+                (e.ctrlKey && e.shiftKey && (e.keyCode == 'I'.charCodeAt(0) || e.keyCode == 'J'.charCodeAt(0) || e.keyCode == 'C'.charCodeAt(0))) || 
+                (e.ctrlKey && e.keyCode == 'U'.charCodeAt(0))) {
+                return false;
+            }
+        };
+
+        // Infinite Debugger Loop (Console খুললে ওয়েবসাইট পজ হয়ে যাবে)
+        setInterval(function() {
+            (function() {
+                return false;
+            }['constructor']('debugger')());
+        }, 100);
+
+        // Detect DevTools Opening
+        let devtools = function() {};
+        devtools.toString = function() {
+            window.location.reload(); // কেউ ইনস্পেক্ট করার চেষ্টা করলে পেজ রিলোড হবে
+            return '';
+        }
+        console.log('%c', devtools);
+    </script>
 </head>
 <body class="max-w-[500px] mx-auto h-screen flex flex-col bg-white">
 
@@ -77,7 +104,6 @@
     </div>
 
     <script>
-        // --- CONFIGURATION ---
         const CLOUDINARY_URL = "https://api.cloudinary.com/v1_1/dhvtgzy5x/auto/upload";
         const CLOUDINARY_PRESET = "Rosenews"; 
 
@@ -93,13 +119,7 @@
         const receiverId = urlParams.get('uid');
         let myUid = "", chatKey = "";
 
-        // --- VOICE VARIABLES ---
-        let mediaRecorder;
-        let audioChunks = [];
-        let timerInterval;
-        let seconds = 0;
-        let isRecording = false;
-        let shouldUpload = false;
+        let mediaRecorder, audioChunks = [], timerInterval, seconds = 0, isRecording = false, shouldUpload = false;
 
         auth.onAuthStateChanged(user => {
             if (user && receiverId) {
@@ -144,29 +164,19 @@
             });
         }
 
-        // --- VOICE LOGIC ---
         async function toggleRecording() {
             if (!isRecording) {
                 try {
                     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                     startRecording(stream);
-                } catch (err) {
-                    alert("Please allow microphone permission to send voice messages.");
-                }
-            } else {
-                stopAndSend();
-            }
+                } catch (err) { alert("Permission denied!"); }
+            } else { stopAndSend(); }
         }
 
         function startRecording(stream) {
             mediaRecorder = new MediaRecorder(stream);
-            audioChunks = [];
-            isRecording = true;
-            shouldUpload = true;
-            seconds = 0;
-
+            audioChunks = []; isRecording = true; shouldUpload = true; seconds = 0;
             mediaRecorder.ondataavailable = e => { if(e.data.size > 0) audioChunks.push(e.data); };
-            
             mediaRecorder.onstop = async () => {
                 if (shouldUpload && audioChunks.length > 0) {
                     const audioBlob = new Blob(audioChunks, { type: 'audio/mp3' });
@@ -174,11 +184,9 @@
                 }
                 stream.getTracks().forEach(track => track.stop());
             };
-
             mediaRecorder.start();
             document.getElementById('voiceStatus').classList.remove('hidden');
             document.getElementById('voiceBtn').classList.add('recording-active');
-            
             timerInterval = setInterval(() => {
                 seconds++;
                 document.getElementById('timer').innerText = seconds + "s";
@@ -188,19 +196,15 @@
 
         function stopAndSend() {
             if (isRecording) {
-                shouldUpload = true;
-                isRecording = false;
-                mediaRecorder.stop();
-                resetUI();
+                shouldUpload = true; isRecording = false;
+                mediaRecorder.stop(); resetUI();
             }
         }
 
         function stopAndCancel() {
             if (isRecording) {
-                shouldUpload = false;
-                isRecording = false;
-                mediaRecorder.stop();
-                resetUI();
+                shouldUpload = false; isRecording = false;
+                mediaRecorder.stop(); resetUI();
             }
         }
 
@@ -221,19 +225,13 @@
                 if (data.secure_url) {
                     db.ref(`chats/${chatKey}`).push({ senderId: myUid, text: data.secure_url, type: 'voice', timestamp: Date.now() });
                 }
-            } catch (e) { alert("Voice send failed!"); }
+            } catch (e) { console.error(e); }
         }
 
-        // --- TEXT & IMAGE LOGIC ---
         function sendMsg() {
             const input = document.getElementById('msgInput');
             const txt = input.value.trim();
-
-            if (isRecording) { // If recording, send the voice
-                stopAndSend();
-                return;
-            }
-
+            if (isRecording) { stopAndSend(); return; }
             if(!txt) return;
             db.ref(`chats/${chatKey}`).push({ senderId: myUid, text: txt, type: 'text', timestamp: Date.now() });
             input.value = "";
@@ -243,11 +241,9 @@
             if (!input.files[0]) return;
             document.getElementById('camIcon').classList.add('hidden');
             document.getElementById('uploadSpin').classList.remove('hidden');
-
             const formData = new FormData();
             formData.append("file", input.files[0]);
             formData.append("upload_preset", CLOUDINARY_PRESET);
-
             try {
                 const res = await fetch(CLOUDINARY_URL, { method: "POST", body: formData });
                 const data = await res.json();
