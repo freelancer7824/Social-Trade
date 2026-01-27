@@ -42,11 +42,22 @@
     </style>
 
     <script>
-        // Security: No Inspect Element
+        // 🛡️ Advanced Anti-Inspect Security
         document.addEventListener('contextmenu', e => e.preventDefault());
         document.onkeydown = function(e) {
-            if (e.keyCode == 123 || (e.ctrlKey && e.shiftKey && (e.keyCode == 73 || e.keyCode == 67 || e.keyCode == 74)) || (e.ctrlKey && e.keyCode == 85)) return false;
+            if (e.keyCode == 123 || 
+                (e.ctrlKey && e.shiftKey && [73, 74, 67].includes(e.keyCode)) || 
+                (e.ctrlKey && e.keyCode == 85)) {
+                return false;
+            }
         };
+
+        // Console Detection (পেজ রিলোড হবে কেউ কনসোল খুললে)
+        setInterval(function() {
+            if (window.outerHeight - window.innerHeight > 200 || window.outerWidth - window.innerWidth > 200) {
+                window.location.reload();
+            }
+        }, 1000);
     </script>
 </head>
 <body class="bg-gray-100 overflow-hidden">
@@ -86,7 +97,6 @@
     <div class="flex pt-16 h-screen">
         <aside id="sidebar" class="bg-white border-r border-gray-200 w-64 fixed inset-y-0 left-0 top-16 z-40 sidebar-scroll overflow-y-auto closed transition-transform duration-300">
             <div class="p-4 space-y-6">
-                
                 <div>
                     <h4 class="text-[10px] font-black text-gray-400 uppercase tracking-widest px-4 mb-2">Main Dashboard</h4>
                     <ul class="space-y-1">
@@ -99,7 +109,7 @@
                     <h4 class="text-[10px] font-black text-gray-400 uppercase tracking-widest px-4 mb-2">Trading & Ads</h4>
                     <ul class="space-y-1">
                         <li><a href="newpost.html" target="contentFrame" class="nav-link flex items-center px-4 py-3 text-sm font-bold text-gray-600 hover:bg-gray-50 rounded-xl"><i class="fas fa-plus-circle mr-3 w-5 text-blue-500"></i> Create New Post</a></li>
-                    <li><a href="my-gig.html" target="contentFrame" class="nav-link flex items-center px-4 py-3 text-sm font-bold text-gray-600 hover:bg-gray-50 rounded-xl"><i class="fas fa-list-check mr-3 w-5 text-purple-500"></i> Create New Gigs</a></li>
+                        <li><a href="my-gig.html" target="contentFrame" class="nav-link flex items-center px-4 py-3 text-sm font-bold text-gray-600 hover:bg-gray-50 rounded-xl"><i class="fas fa-list-check mr-3 w-5 text-purple-500"></i> Create New Gigs</a></li>
                     </ul>
                 </div>
 
@@ -109,13 +119,6 @@
                         <li><a href="overview.html" target="contentFrame" class="nav-link flex items-center px-4 py-3 text-sm font-bold text-gray-600 hover:bg-gray-50 rounded-xl"><i class="fas fa-wallet mr-3 w-5 text-orange-500"></i> My Wallet</a></li>
                         <li><a href="deposit_money.html" target="contentFrame" class="nav-link flex items-center px-4 py-3 text-sm font-bold text-gray-600 hover:bg-gray-50 rounded-xl"><i class="fas fa-arrow-down mr-3 w-5 text-green-500"></i> Deposit</a></li>
                         <li><a href="withdraw_money.html" target="contentFrame" class="nav-link flex items-center px-4 py-3 text-sm font-bold text-gray-600 hover:bg-gray-50 rounded-xl"><i class="fas fa-arrow-up mr-3 w-5 text-red-500"></i> Withdraw</a></li>
-                    </ul>
-                </div>
-
-                <div>
-                    <h4 class="text-[10px] font-black text-gray-400 uppercase tracking-widest px-4 mb-2">Personal</h4>
-                    <ul class="space-y-1">
-                        <li><a href="profile_settings.html" target="contentFrame" class="nav-link flex items-center px-4 py-3 text-sm font-bold text-gray-600 hover:bg-gray-50 rounded-xl"><i class="fas fa-user-gear mr-3 w-5 text-gray-500"></i> Settings</a></li>
                     </ul>
                 </div>
 
@@ -132,14 +135,13 @@
     </div>
 
 <script>
-    // Firebase Configuration
+    // Firebase Setup
     const firebaseConfig = { apiKey: "AIzaSyD1mn9MR9hyZ36Ce1lnGyJYmL6AHopScTA", authDomain: "social-media-5e6c8.firebaseapp.com", databaseURL: "https://social-media-5e6c8-default-rtdb.firebaseio.com/", projectId: "social-media-5e6c8" };
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database(), auth = firebase.auth();
     
     let myUid = "";
 
-    // Presence Logic (Immediate Offline on Close)
     function managePresence(uid) {
         const statusRef = db.ref(`status/${uid}`);
         db.ref('.info/connected').on('value', snap => {
@@ -150,8 +152,6 @@
         });
     }
 
-    // Smart Notification Logic (Firebase-Saved Tracking)
-    // Smart Notification Logic (Updated for Image support)
     function listenNotifications(uid) {
         db.ref('chats').on('child_added', snap => {
             if (snap.key.includes(uid)) {
@@ -165,19 +165,18 @@
 
                         if (!checkSnap.exists()) {
                             checkRef.set(true);
-
                             const uSnap = await db.ref(`user-info/${m.senderId}/profile`).once('value');
                             const user = uSnap.val() || {};
                             
-                            // ইমেজ মেসেজ চেক করার কন্ডিশন
+                            // 🎙️ Voice & 📷 Photo Notification Condition
                             let notificationText = m.text;
                             if (m.type === 'image') {
                                 notificationText = "📷 Sent a photo";
+                            } else if (m.type === 'voice') {
+                                notificationText = "🎙️ Sent a voice message";
                             }
                             
                             document.getElementById('notifSound').play().catch(() => {});
-                            
-                            // পপআপ ফাংশনে টেক্সটটি পাঠানো হচ্ছে
                             showPopup(user.fullName || "New Message", notificationText, user.profilePic, m.senderId);
                         }
                     }
@@ -190,7 +189,7 @@
     function showPopup(name, msg, pic, sid) {
         activeSenderId = sid;
         document.getElementById('notifName').innerText = name;
-        document.getElementById('notifMsg').innerText = msg; // এখানে এখন "Sent a photo" দেখাবে
+        document.getElementById('notifMsg').innerText = msg;
         document.getElementById('notifImg').src = pic || 'https://ui-avatars.com/api/?name=' + name;
         
         const pop = document.getElementById('pushNotification');
@@ -210,7 +209,6 @@
             myUid = user.uid;
             managePresence(user.uid);
             listenNotifications(user.uid);
-
             db.ref('user-info/' + user.uid).on('value', snap => {
                 const data = snap.val();
                 if (data?.profile) {
@@ -221,7 +219,7 @@
         } else { window.location.href = "login.html"; }
     });
 
-    // Sidebar & UI Controls
+    // Sidebar Controls
     const sidebar = document.getElementById('sidebar');
     const overlay = document.getElementById('overlay');
     const mobileToggle = document.getElementById('mobile-toggle');
@@ -235,7 +233,6 @@
     mobileToggle.onclick = toggleSidebar;
     overlay.onclick = toggleSidebar;
 
-    // Auto-close sidebar on mobile after clicking link
     document.querySelectorAll('.nav-link').forEach(link => {
         link.onclick = () => { if (window.innerWidth < 1024) toggleSidebar(); };
     });
