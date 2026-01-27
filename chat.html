@@ -26,34 +26,13 @@
     </style>
 
     <script>
-        // --- 🛡️ ADVANCED ANTI-INSPECT & PROTECTION ---
-        
-        // Disable Right Click
+        // 🛡️ Safe Anti-Inspect (বুট লুপ হবে না)
         document.addEventListener('contextmenu', e => e.preventDefault());
-
-        // Disable Shortcuts (F12, Ctrl+Shift+I, Ctrl+U, etc.)
         document.onkeydown = function(e) {
-            if (e.keyCode == 123 || 
-                (e.ctrlKey && e.shiftKey && (e.keyCode == 'I'.charCodeAt(0) || e.keyCode == 'J'.charCodeAt(0) || e.keyCode == 'C'.charCodeAt(0))) || 
-                (e.ctrlKey && e.keyCode == 'U'.charCodeAt(0))) {
+            if (e.keyCode == 123 || (e.ctrlKey && e.shiftKey && [73, 74, 67].includes(e.keyCode)) || (e.ctrlKey && e.keyCode == 85)) {
                 return false;
             }
         };
-
-        // Infinite Debugger Loop (Console খুললে ওয়েবসাইট পজ হয়ে যাবে)
-        setInterval(function() {
-            (function() {
-                return false;
-            }['constructor']('debugger')());
-        }, 100);
-
-        // Detect DevTools Opening
-        let devtools = function() {};
-        devtools.toString = function() {
-            window.location.reload(); // কেউ ইনস্পেক্ট করার চেষ্টা করলে পেজ রিলোড হবে
-            return '';
-        }
-        console.log('%c', devtools);
     </script>
 </head>
 <body class="max-w-[500px] mx-auto h-screen flex flex-col bg-white">
@@ -99,7 +78,6 @@
     </div>
 
     <div id="imgModal" onclick="this.style.display='none'">
-        <span class="absolute top-5 right-5 text-white text-2xl"><i class="fas fa-times"></i></span>
         <img id="fullImg" src="">
     </div>
 
@@ -169,7 +147,7 @@
                 try {
                     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                     startRecording(stream);
-                } catch (err) { alert("Permission denied!"); }
+                } catch (err) { alert("Mic permission error!"); }
             } else { stopAndSend(); }
         }
 
@@ -225,7 +203,7 @@
                 if (data.secure_url) {
                     db.ref(`chats/${chatKey}`).push({ senderId: myUid, text: data.secure_url, type: 'voice', timestamp: Date.now() });
                 }
-            } catch (e) { console.error(e); }
+            } catch (e) { alert("Voice send failed!"); }
         }
 
         function sendMsg() {
