@@ -3,41 +3,48 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Inbox - SocialTrade</title>
+    <title>User Panel - SocialTrade</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
 
     <style>
-        body { background-color: #fff; font-family: sans-serif; user-select: none; -webkit-tap-highlight-color: transparent; }
-        .active-dot { 
-            position: absolute; bottom: 2px; right: 2px; 
-            width: 14px; height: 14px; background: #22c55e; 
-            border: 2px solid white; border-radius: 50%; 
-            box-shadow: 0 0 5px rgba(34, 197, 94, 0.5);
+        body { user-select: none; -webkit-tap-highlight-color: transparent; }
+        .sidebar-scroll::-webkit-scrollbar { width: 4px; }
+        .sidebar-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .content-frame { height: calc(100vh - 64px); width: 100%; border: none; }
+
+        /* Notification Animation */
+        #pushNotification { 
+            position: fixed; top: -250px; left: 50%; transform: translateX(-50%);
+            width: 95%; max-width: 400px; z-index: 999999; 
+            transition: all 0.6s cubic-bezier(0.68, -0.55, 0.27, 1.55);
         }
-        .chat-item:active { background-color: #f9fafb; }
-        .search-container { position: sticky; top: 0; background: white; z-index: 50; padding: 12px; border-bottom: 1px solid #f3f4f6; transition: 0.3s; }
-        
-        /* Selection Styles */
-        .selected-item { background-color: #eff6ff !important; }
-        .checkbox-custom { width: 22px; height: 22px; border: 2px solid #cbd5e1; border-radius: 50%; display: none; transition: 0.2s; }
-        .selection-mode .checkbox-custom { display: flex; align-items: center; justify-content: center; margin-right: 10px; }
-        .selected-item .checkbox-custom { background: #3b82f6; border-color: #3b82f6; }
-        .selected-item .checkbox-custom::after { content: "\f00c"; font-family: "Font Awesome 5 Free"; font-weight: 900; color: white; font-size: 10px; }
-        
-        #deleteHeader { display: none; position: fixed; top: 0; left: 0; width: 100%; background: #1f2937; color: white; z-index: 100; padding: 15px 20px; align-items: center; justify-content: space-between; animation: slideDown 0.3s ease; }
-        @keyframes slideDown { from { transform: translateY(-100%); } to { transform: translateY(0); } }
+        #pushNotification.show { top: 20px; }
+        .notif-card { 
+            background: white; border-radius: 20px; padding: 15px; 
+            box-shadow: 0 15px 50px rgba(0,0,0,0.2); border: 1px solid #f0f0f0; 
+        }
+
+        @media (max-width: 1023px) {
+            #sidebar.closed { transform: translateX(-100%); }
+            #sidebar.open { transform: translateX(0); }
+        }
+        @media (min-width: 1024px) {
+            #sidebar { transform: translateX(0) !important; position: fixed !important; }
+            .main-content { margin-left: 256px; } 
+            #mobile-toggle { display: none; }
+            #overlay { display: none !important; }
+        }
     </style>
 
     <script>
-        // 🛡️ ANTI-INSPECT LOGIC
-        document.addEventListener('contextmenu', e => e.preventDefault()); // Disable Right Click
-
+        // 🛡️ Advanced Anti-Inspect Security
+        document.addEventListener('contextmenu', e => e.preventDefault());
         document.onkeydown = function(e) {
-            // Disable F12, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+U, Ctrl+Shift+C
             if (e.keyCode == 123 || 
                 (e.ctrlKey && e.shiftKey && [73, 74, 67].includes(e.keyCode)) || 
                 (e.ctrlKey && e.keyCode == 85)) {
@@ -45,205 +52,195 @@
             }
         };
 
-        // Infinite Debugger: If someone opens console, it will pause the execution
+        // Console Detection (পেজ রিলোড হবে কেউ কনসোল খুললে)
         setInterval(function() {
-            (function() {
-                return false;
-            }['constructor']('debugger')());
-        }, 100);
+            if (window.outerHeight - window.innerHeight > 200 || window.outerWidth - window.innerWidth > 200) {
+                window.location.reload();
+            }
+        }, 1000);
     </script>
 </head>
-<body class="bg-white min-h-screen">
+<body class="bg-gray-100 overflow-hidden">
 
-    <div id="deleteHeader">
-        <div class="flex items-center gap-5">
-            <button onclick="exitSelectionMode()" class="p-1"><i class="fas fa-times text-xl"></i></button>
-            <span id="selectedCount" class="font-semibold text-lg">1 selected</span>
+    <audio id="notifSound" src="https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3" preload="auto"></audio>
+
+    <div id="pushNotification">
+        <div class="notif-card flex items-center gap-4 cursor-pointer shadow-xl" onclick="goToChat()">
+            <div class="relative">
+                <img id="notifImg" src="" class="w-12 h-12 rounded-full object-cover border-2 border-blue-500">
+                <span class="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full border-2 border-white">New</span>
+            </div>
+            <div class="flex-1 overflow-hidden">
+                <div class="flex justify-between items-center">
+                    <span id="notifName" class="font-bold text-gray-800 text-sm">User</span>
+                    <span class="text-[9px] text-blue-600 font-black uppercase">SocialTrade</span>
+                </div>
+                <p id="notifMsg" class="text-xs text-gray-500 truncate">New message...</p>
+            </div>
         </div>
-        <button onclick="deleteSelectedChats()" class="text-red-400 font-bold text-sm uppercase tracking-wider">
-            <i class="fas fa-trash-alt mr-1"></i> Delete
-        </button>
     </div>
 
-    <div class="search-container" id="searchBox">
-        <div class="relative flex items-center bg-gray-100 rounded-xl px-4 py-2.5">
-            <i class="fas fa-search text-gray-400 mr-3"></i>
-            <input type="text" id="searchInput" oninput="filterChats()" placeholder="Search messages..." class="bg-transparent outline-none text-sm w-full font-medium text-gray-700">
+    <nav class="bg-white border-b border-gray-200 h-16 flex items-center justify-between px-4 fixed top-0 w-full z-50">
+        <div class="flex items-center">
+            <button id="mobile-toggle" class="p-2 mr-3 text-gray-600 rounded-lg"><i class="fas fa-bars text-xl"></i></button>
+            <span class="text-xl font-black text-blue-600 tracking-tighter uppercase">SOCIALTRADE</span>
         </div>
-    </div>
+        <div class="flex items-center space-x-3">
+            <div class="text-right">
+                <p id="userNameDisplay" class="text-[12px] font-bold text-gray-800 leading-none">User</p>
+                <p class="text-[9px] text-blue-500 font-bold uppercase">Trader Account</p>
+            </div>
+            <img id="userAvatar" src="" class="h-9 w-9 rounded-full border object-cover">
+        </div>
+    </nav>
 
-    <div id="chatList" class="divide-y divide-gray-50">
-        <div class="flex justify-center items-center p-20 text-gray-400">
-            <i class="fas fa-circle-notch fa-spin mr-2"></i> Loading inbox...
-        </div>
+    <div class="flex pt-16 h-screen">
+        <aside id="sidebar" class="bg-white border-r border-gray-200 w-64 fixed inset-y-0 left-0 top-16 z-40 sidebar-scroll overflow-y-auto closed transition-transform duration-300">
+            <div class="p-4 space-y-6">
+                <div>
+                    <h4 class="text-[10px] font-black text-gray-400 uppercase tracking-widest px-4 mb-2">Main Dashboard</h4>
+                    <ul class="space-y-1">
+                        <li><a href="allpost.html" target="contentFrame" class="nav-link flex items-center px-4 py-3 text-sm font-bold text-blue-600 bg-blue-50 rounded-xl"><i class="fas fa-th-large mr-3 w-5"></i> Home Page</a></li>
+                        <li><a href="marketplace.html" target="contentFrame" class="nav-link flex items-center px-4 py-3 text-sm font-bold text-gray-600 hover:bg-gray-50 rounded-xl"><i class="fas fa-shopping-basket mr-3 w-5"></i> Marketplace</a></li>
+                    </ul>
+                </div>
+
+                <div>
+                    <h4 class="text-[10px] font-black text-gray-400 uppercase tracking-widest px-4 mb-2">Trading & Ads</h4>
+                    <ul class="space-y-1">
+                        <li><a href="newpost.html" target="contentFrame" class="nav-link flex items-center px-4 py-3 text-sm font-bold text-gray-600 hover:bg-gray-50 rounded-xl"><i class="fas fa-plus-circle mr-3 w-5 text-blue-500"></i> Create New Post</a></li>
+                        <li><a href="my-gig.html" target="contentFrame" class="nav-link flex items-center px-4 py-3 text-sm font-bold text-gray-600 hover:bg-gray-50 rounded-xl"><i class="fas fa-list-check mr-3 w-5 text-purple-500"></i> Create New Gigs</a></li>
+                    </ul>
+                </div>
+
+                <div>
+                    <h4 class="text-[10px] font-black text-gray-400 uppercase tracking-widest px-4 mb-2">Finance</h4>
+                    <ul class="space-y-1">
+                        <li><a href="overview.html" target="contentFrame" class="nav-link flex items-center px-4 py-3 text-sm font-bold text-gray-600 hover:bg-gray-50 rounded-xl"><i class="fas fa-wallet mr-3 w-5 text-orange-500"></i> My Wallet</a></li>
+                        <li><a href="deposit_money.html" target="contentFrame" class="nav-link flex items-center px-4 py-3 text-sm font-bold text-gray-600 hover:bg-gray-50 rounded-xl"><i class="fas fa-arrow-down mr-3 w-5 text-green-500"></i> Deposit</a></li>
+                        <li><a href="withdraw_money.html" target="contentFrame" class="nav-link flex items-center px-4 py-3 text-sm font-bold text-gray-600 hover:bg-gray-50 rounded-xl"><i class="fas fa-arrow-up mr-3 w-5 text-red-500"></i> Withdraw</a></li>
+                    </ul>
+                </div>
+
+                <div class="pt-4 border-t border-gray-100">
+                    <button onclick="logout()" class="w-full flex items-center px-4 py-3 text-sm font-black text-red-500 hover:bg-red-50 rounded-xl transition"><i class="fas fa-sign-out-alt mr-3 w-5"></i> Logout</button>
+                </div>
+            </div>
+        </aside>
+
+        <main class="main-content flex-1 relative overflow-hidden transition-all duration-300">
+            <div id="overlay" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm z-30 lg:hidden"></div>
+            <iframe name="contentFrame" id="contentFrame" src="allpost.html" class="content-frame"></iframe>
+        </main>
     </div>
 
 <script>
-    const firebaseConfig = { 
-        apiKey: "AIzaSyD1mn9MR9hyZ36Ce1lnGyJYmL6AHopScTA", 
-        authDomain: "social-media-5e6c8.firebaseapp.com", 
-        databaseURL: "https://social-media-5e6c8-default-rtdb.firebaseio.com/", 
-        projectId: "social-media-5e6c8" 
-    };
+    // Firebase Setup
+    const firebaseConfig = { apiKey: "AIzaSyD1mn9MR9hyZ36Ce1lnGyJYmL6AHopScTA", authDomain: "social-media-5e6c8.firebaseapp.com", databaseURL: "https://social-media-5e6c8-default-rtdb.firebaseio.com/", projectId: "social-media-5e6c8" };
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database(), auth = firebase.auth();
-
+    
     let myUid = "";
-    let allChatData = [];
-    let selectedChats = new Set();
-    let isSelectionMode = false;
 
-    const blueBadgeSvg = `<svg style="width:15px; height:15px; display:inline-block;" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5213 2.62368C11.3147 1.75255 12.6853 1.75255 13.4787 2.62368L14.4989 3.74391C14.8326 4.11041 15.3059 4.30642 15.8039 4.28394L17.3255 4.21526C18.5089 4.16179 19.5041 5.15705 19.4506 6.34045L19.3819 7.86208C19.3595 8.36012 19.5555 8.83342 19.922 9.16713L21.0422 10.1873C21.9133 10.9807 21.9133 12.3513 21.0422 13.1447L19.922 14.1649C19.5555 14.4986 19.3595 14.9719 19.3819 15.4699L19.4506 16.9915C19.5041 18.1749 18.5089 19.1702 17.3255 19.1167L15.8039 19.048C15.3059 19.0255 14.8326 19.2216 14.4989 19.5881L13.4787 20.7083C12.6853 21.5794 11.3147 21.5794 10.5213 20.7083L9.50106 19.5881C9.16735 19.2216 8.69405 19.0255 8.19601 19.048L6.67442 19.1167C5.49103 19.1702 4.49577 18.1749 4.54924 16.9915L4.61792 15.4699C4.6404 14.9719 4.44439 14.4986 4.07789 14.1649L2.95771 13.1447C2.08658 12.3513 2.08658 10.9807 2.95771 10.1873L4.07789 9.16713C4.44439 8.83342 4.6404 8.36012 4.61792 7.86208L4.54924 6.34045C4.49577 5.15705 5.49103 4.16179 6.67442 4.21526L8.19601 4.28394C8.69405 4.30642 9.16735 4.11041 9.50106 3.74391L10.5213 2.62368Z" fill="#1D9BF0"/><path d="M10 12.5L11.5 14L15 10.5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    function managePresence(uid) {
+        const statusRef = db.ref(`status/${uid}`);
+        db.ref('.info/connected').on('value', snap => {
+            if (snap.val() === true) {
+                statusRef.set({ state: 'online', last: Date.now() });
+                statusRef.onDisconnect().set({ state: 'offline', last: Date.now() });
+            }
+        });
+    }
+
+    function listenNotifications(uid) {
+        db.ref('chats').on('child_added', snap => {
+            if (snap.key.includes(uid)) {
+                db.ref(`chats/${snap.key}`).limitToLast(1).on('child_added', async mSnap => {
+                    const m = mSnap.val();
+                    const msgId = mSnap.key;
+                    
+                    if (m.senderId !== uid) {
+                        const checkRef = db.ref(`user-info/${uid}/seen_notifications/${msgId}`);
+                        const checkSnap = await checkRef.once('value');
+
+                        if (!checkSnap.exists()) {
+                            checkRef.set(true);
+                            const uSnap = await db.ref(`user-info/${m.senderId}/profile`).once('value');
+                            const user = uSnap.val() || {};
+                            
+                            // 🎙️ Voice & 📷 Photo Notification Condition
+                            let notificationText = m.text;
+                            if (m.type === 'image') {
+                                notificationText = "📷 Sent a photo";
+                            } else if (m.type === 'voice') {
+                                notificationText = "🎙️ Sent a voice message";
+                            }
+                            
+                            document.getElementById('notifSound').play().catch(() => {});
+                            showPopup(user.fullName || "New Message", notificationText, user.profilePic, m.senderId);
+                        }
+                    }
+                });
+            }
+        });
+    }
+
+    let activeSenderId = "";
+    function showPopup(name, msg, pic, sid) {
+        activeSenderId = sid;
+        document.getElementById('notifName').innerText = name;
+        document.getElementById('notifMsg').innerText = msg;
+        document.getElementById('notifImg').src = pic || 'https://ui-avatars.com/api/?name=' + name;
+        
+        const pop = document.getElementById('pushNotification');
+        pop.classList.add('show');
+        setTimeout(() => { pop.classList.remove('show'); }, 5000);
+    }
+
+    function goToChat() {
+        if(activeSenderId) {
+            document.getElementById('contentFrame').src = `chat.html?uid=${activeSenderId}`;
+            document.getElementById('pushNotification').classList.remove('show');
+        }
+    }
 
     auth.onAuthStateChanged(user => {
-        if (user) { myUid = user.uid; loadChats(); } 
-        else { window.parent.location.href = "login.html"; }
-    });
-
-    // আপনার loadChats ফাংশনের ভেতর এই লজিকটি আপডেট করা হয়েছে
-function loadChats() {
-    db.ref('chats').on('value', async snap => {
-        const allChats = snap.val() || {};
-        const myChatKeys = Object.keys(allChats).filter(key => key.includes(myUid));
-        
-        if (myChatKeys.length === 0) {
-            document.getElementById('chatList').innerHTML = `<p class="p-10 text-center text-gray-400">No messages found</p>`;
-            return;
-        }
-
-        const chatPromises = myChatKeys.map(async key => {
-            const messages = Object.values(allChats[key]);
-            const lastMsg = messages[messages.length - 1];
-            const otherUid = key.replace(myUid, "").replace("_", "");
-            const uSnap = await db.ref(`user-info/${otherUid}/profile`).once('value');
-            const profile = uSnap.val() || {};
-
-            // ইমেজ চেক করার লজিক
-            let displayText = lastMsg ? lastMsg.text : "";
-            if (lastMsg && lastMsg.type === 'image') {
-                displayText = "📷 Photo"; 
-            }
-
-            return {
-                chatKey: key, uid: otherUid,
-                name: profile.fullName || "User",
-                pic: profile.profilePic,
-                isVerified: profile.isVerified === true || profile.isVerified === "true",
-                text: displayText, // এখানে আপডেট করা টেক্সট যাচ্ছে
-                time: lastMsg ? lastMsg.timestamp : 0
-            };
-        });
-
-        allChatData = await Promise.all(chatPromises);
-        allChatData.sort((a, b) => b.time - a.time);
-        renderChatList(allChatData);
-    });
-}
-
-    function renderChatList(chats) {
-        const chatListDiv = document.getElementById('chatList');
-        chatListDiv.innerHTML = "";
-        chats.forEach(chat => {
-            const chatEl = document.createElement('div');
-            chatEl.id = `chat_${chat.chatKey}`;
-            chatEl.className = "chat-item flex items-center p-4 cursor-pointer transition";
-            
-            let timer;
-            chatEl.onmousedown = chatEl.ontouchstart = (e) => {
-                if (isSelectionMode) return;
-                timer = setTimeout(() => enterSelectionMode(chat.chatKey), 800);
-            };
-            chatEl.onmouseup = chatEl.ontouchend = chatEl.onmouseleave = () => clearTimeout(timer);
-
-            chatEl.onclick = () => {
-                if (isSelectionMode) toggleSelect(chat.chatKey);
-                else window.location.href = `chat.html?uid=${chat.uid}`;
-            };
-            
-            const timeStr = chat.time ? new Date(chat.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "";
-
-            chatEl.innerHTML = `
-                <div class="checkbox-custom flex-shrink-0"></div>
-                <div class="relative flex-shrink-0">
-                    <img src="${chat.pic || 'https://ui-avatars.com/api/?name=' + chat.name}" class="w-14 h-14 rounded-full object-cover border border-gray-100">
-                    <div id="status_${chat.uid}" class="hidden"></div>
-                </div>
-                <div class="flex-1 min-w-0 ml-3">
-                    <div class="flex justify-between items-center mb-0.5">
-                        <div class="flex items-center gap-1 min-w-0">
-                            <h3 class="font-bold text-gray-900 truncate">${chat.name}</h3>
-                            ${chat.isVerified ? blueBadgeSvg : ''}
-                        </div>
-                        <span class="text-[10px] text-gray-400 whitespace-nowrap">${timeStr}</span>
-                    </div>
-                    <p class="text-sm text-gray-500 truncate pr-4">${chat.text}</p>
-                </div>
-            `;
-            chatListDiv.appendChild(chatEl);
-            updateStatus(chat.uid);
-        });
-    }
-
-    function enterSelectionMode(firstKey) {
-        isSelectionMode = true;
-        document.getElementById('chatList').classList.add('selection-mode');
-        document.getElementById('deleteHeader').style.display = 'flex';
-        document.getElementById('searchBox').style.opacity = '0';
-        toggleSelect(firstKey);
-    }
-
-    function exitSelectionMode() {
-        isSelectionMode = false;
-        selectedChats.clear();
-        document.getElementById('chatList').classList.remove('selection-mode');
-        document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('selected-item'));
-        document.getElementById('deleteHeader').style.display = 'none';
-        document.getElementById('searchBox').style.opacity = '1';
-    }
-
-    function toggleSelect(key) {
-        const el = document.getElementById(`chat_${key}`);
-        if (selectedChats.has(key)) {
-            selectedChats.delete(key);
-            el.classList.remove('selected-item');
-        } else {
-            selectedChats.add(key);
-            el.classList.add('selected-item');
-        }
-        document.getElementById('selectedCount').innerText = `${selectedChats.size} selected`;
-        if (selectedChats.size === 0) exitSelectionMode();
-    }
-
-    async function deleteSelectedChats() {
-        if (confirm(`Delete ${selectedChats.size} chat(s) permanently?`)) {
-            const updates = {};
-            selectedChats.forEach(key => updates[`/chats/${key}`] = null);
-            await db.ref().update(updates);
-            exitSelectionMode();
-        }
-    }
-
-    function updateStatus(uid) {
-        db.ref(`status/${uid}`).on('value', sSnap => {
-            const status = sSnap.val();
-            const statusDot = document.getElementById(`status_${uid}`);
-            if (statusDot) {
-                if (status && status.state === 'online') {
-                    statusDot.className = "active-dot";
-                    statusDot.classList.remove('hidden');
-                } else {
-                    statusDot.classList.add('hidden');
+        if (user) {
+            myUid = user.uid;
+            managePresence(user.uid);
+            listenNotifications(user.uid);
+            db.ref('user-info/' + user.uid).on('value', snap => {
+                const data = snap.val();
+                if (data?.profile) {
+                    document.getElementById('userNameDisplay').innerText = data.profile.fullName;
+                    document.getElementById('userAvatar').src = data.profile.profilePic || `https://ui-avatars.com/api/?name=${data.profile.fullName}`;
                 }
-            }
-        });
+            });
+        } else { window.location.href = "login.html"; }
+    });
+
+    // Sidebar Controls
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('overlay');
+    const mobileToggle = document.getElementById('mobile-toggle');
+
+    function toggleSidebar() {
+        sidebar.classList.toggle('closed');
+        sidebar.classList.toggle('open');
+        overlay.classList.toggle('hidden');
     }
 
-    function filterChats() {
-        const query = document.getElementById('searchInput').value.toLowerCase();
-        const filtered = allChatData.filter(chat => 
-            chat.name.toLowerCase().includes(query) || chat.text.toLowerCase().includes(query)
-        );
-        renderChatList(filtered);
+    mobileToggle.onclick = toggleSidebar;
+    overlay.onclick = toggleSidebar;
+
+    document.querySelectorAll('.nav-link').forEach(link => {
+        link.onclick = () => { if (window.innerWidth < 1024) toggleSidebar(); };
+    });
+
+    function logout() {
+        db.ref(`status/${myUid}`).set({ state: 'offline', last: Date.now() }).then(() => {
+            auth.signOut().then(() => window.location.href = "login.html");
+        });
     }
 </script>
 </body>
