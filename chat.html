@@ -14,21 +14,53 @@
         #messages::-webkit-scrollbar { width: 4px; }
         #messages::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
         
-        .img-container { width: 220px; height: 280px; border-radius: 18px; overflow: hidden; background: #f0f0f0; cursor: pointer; border: 1px solid #eee; }
-        .img-container img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        /* Messenger Style Image Box */
+        .img-container { 
+            width: 220px; 
+            height: 280px; 
+            border-radius: 18px; 
+            overflow: hidden; 
+            background: #f0f0f0;
+            cursor: pointer;
+            border: 1px solid #eee;
+        }
+        .img-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
 
-        #imgModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 9999; justify-content: center; align-items: center; }
+        /* Image Full Screen Modal */
+        #imgModal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.95);
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
+        }
         #imgModal img { max-width: 95%; max-height: 85%; border-radius: 8px; }
 
         .upload-loader { border: 2px solid #f3f3f3; border-top: 2px solid #3b82f6; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-
-        /* Voice Styles */
-        audio { height: 35px; width: 180px; }
-        .recording-active { color: #ff3b30; animation: blink 1s infinite; }
-        @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
-        .voice-bubble { padding: 8px; border-radius: 20px; display: flex; align-items: center; }
     </style>
+
+    <script>
+        // 🔒 Advanced Protection
+        document.addEventListener('contextmenu', e => e.preventDefault());
+        document.onkeydown = function(e) {
+            if (e.keyCode == 123 || (e.ctrlKey && e.shiftKey && (e.keyCode == 73 || e.keyCode == 74 || e.keyCode == 67)) || (e.ctrlKey && e.keyCode == 85)) return false;
+        };
+        // Disable DevTools Detection
+        setInterval(() => {
+            const before = new Date().getTime();
+            debugger;
+            const after = new Date().getTime();
+            if (after - before > 100) window.location.reload();
+        }, 100);
+    </script>
 </head>
 <body class="max-w-[500px] mx-auto h-screen flex flex-col bg-white">
 
@@ -46,25 +78,13 @@
 
     <div id="messages" class="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50"></div>
 
-    <div class="p-3 border-t bg-white flex gap-2 items-center relative">
+    <div class="p-3 border-t bg-white flex gap-2 items-center">
         <label class="p-2 cursor-pointer active:scale-90 transition">
             <i class="fas fa-image text-blue-500 text-xl" id="camIcon"></i>
             <div id="uploadSpin" class="upload-loader hidden"></div>
             <input type="file" id="imageInput" accept="image/*" class="hidden" onchange="uploadToCloudinary(this)">
         </label>
-
-        <button id="voiceBtn" onclick="toggleVoice()" class="p-2 active:scale-90 transition">
-            <i class="fas fa-microphone text-blue-500 text-xl" id="micIcon"></i>
-        </button>
-
-        <div class="flex-1 relative">
-            <input id="msgInput" type="text" placeholder="Aa" class="w-full bg-gray-100 rounded-full px-5 py-2.5 outline-none text-sm border focus:border-blue-300 transition" autocomplete="off" onkeypress="if(event.key==='Enter')sendMsg()">
-            <div id="recordTimer" class="hidden absolute inset-0 bg-gray-100 rounded-full flex items-center px-5 text-red-500 font-bold text-sm">
-                <span class="mr-2 h-2 w-2 bg-red-500 rounded-full animate-pulse"></span>
-                Recording... <span id="timerVal" class="ml-auto text-gray-600">00:00</span>
-            </div>
-        </div>
-        
+        <input id="msgInput" type="text" placeholder="Aa" class="flex-1 bg-gray-100 rounded-full px-5 py-2.5 outline-none text-sm border focus:border-blue-300 transition" autocomplete="off" onkeypress="if(event.key==='Enter')sendMsg()">
         <button onclick="sendMsg()" class="text-blue-500 p-2 font-bold active:scale-90 transition"><i class="fas fa-paper-plane text-xl"></i></button>
     </div>
 
@@ -74,7 +94,7 @@
     </div>
 
     <script>
-        const CLOUDINARY_URL = "https://api.cloudinary.com/v1_1/dhvtgzy5x/auto/upload";
+        const CLOUDINARY_URL = "https://api.cloudinary.com/v1_1/dhvtgzy5x/image/upload";
         const CLOUDINARY_PRESET = "Rosenews"; 
 
         const firebaseConfig = { 
@@ -89,12 +109,6 @@
         const receiverId = urlParams.get('uid');
         let myUid = "", chatKey = "";
 
-        // Voice Recorder Logic
-        let mediaRecorder;
-        let audioChunks = [];
-        let recordInterval;
-        let seconds = 0;
-
         auth.onAuthStateChanged(user => {
             if (user && receiverId) {
                 myUid = user.uid;
@@ -104,66 +118,6 @@
             }
         });
 
-        async function toggleVoice() {
-            const micIcon = document.getElementById('micIcon');
-            const timerUI = document.getElementById('recordTimer');
-
-            if (!mediaRecorder || mediaRecorder.state === "inactive") {
-                try {
-                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                    mediaRecorder = new MediaRecorder(stream);
-                    audioChunks = [];
-                    seconds = 0;
-
-                    mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
-                    mediaRecorder.onstop = async () => {
-                        clearInterval(recordInterval);
-                        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-                        if(seconds > 0) uploadFile(audioBlob, 'voice');
-                        stream.getTracks().forEach(t => t.stop());
-                        timerUI.classList.add('hidden');
-                        micIcon.className = "fas fa-microphone text-blue-500 text-xl";
-                    };
-
-                    mediaRecorder.start();
-                    timerUI.classList.remove('hidden');
-                    micIcon.className = "fas fa-stop-circle text-red-500 text-xl recording-active";
-                    
-                    recordInterval = setInterval(() => {
-                        seconds++;
-                        let mins = Math.floor(seconds / 60);
-                        let secs = seconds % 60;
-                        document.getElementById('timerVal').innerText = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-                        
-                        // 30 Seconds Limit
-                        if (seconds >= 30) toggleVoice();
-                    }, 1000);
-
-                } catch (err) { alert("Microphone access denied."); }
-            } else {
-                mediaRecorder.stop();
-            }
-        }
-
-        async function uploadFile(file, type) {
-            const formData = new FormData();
-            formData.append("file", file);
-            formData.append("upload_preset", CLOUDINARY_PRESET);
-
-            try {
-                const res = await fetch(CLOUDINARY_URL, { method: "POST", body: formData });
-                const data = await res.json();
-                if (data.secure_url) {
-                    db.ref(`chats/${chatKey}`).push({
-                        senderId: myUid,
-                        text: data.secure_url,
-                        type: type,
-                        timestamp: Date.now()
-                    });
-                }
-            } catch (e) { console.error("Upload failed"); }
-        }
-
         function loadHeader() {
             db.ref(`user-info/${receiverId}/profile`).on('value', s => {
                 const u = s.val() || {};
@@ -171,8 +125,8 @@
                 document.getElementById('headPic').src = u.profilePic || 'https://ui-avatars.com/api/?name=User';
             });
             db.ref(`status/${receiverId}`).on('value', s => {
-                const d = s.val();
-                const isOnline = d && (d.state === 'online' || Date.now() < d.last);
+                const data = s.val();
+                const isOnline = data && (data.state === 'online' || Date.now() < data.last);
                 document.getElementById('statusText').innerText = isOnline ? "Active now" : "Offline";
                 document.getElementById('statusDot').className = `w-2.5 h-2.5 rounded-full ${isOnline ? 'bg-green-500 shadow-[0_0_5px_#22c55e]' : 'bg-gray-300'}`;
             });
@@ -185,16 +139,14 @@
                 container.innerHTML = Object.values(msgs).map(m => {
                     const isMe = m.senderId === myUid;
                     let content = "";
+                    
                     if(m.type === 'image') {
                         content = `<div class="img-container" onclick="openFullImage('${m.text}')"><img src="${m.text}" loading="lazy"></div>`;
-                    } else if(m.type === 'voice') {
-                        content = `<div class="voice-bubble ${isMe ? 'bg-blue-600' : 'bg-white border shadow-sm'}">
-                                     <audio controls class="${isMe ? 'filter invert brightness-200' : ''}"><source src="${m.text}" type="audio/webm"></audio>
-                                   </div>`;
                     } else {
                         content = `<div class="px-4 py-2.5 rounded-2xl text-[14px] shadow-sm ${isMe ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white text-gray-800 border border-gray-100 rounded-bl-none'}">${m.text}</div>`;
                     }
-                    return `<div class="flex ${isMe ? 'justify-end' : 'justify-start'} animate-fade-in"><div class="max-w-[85%]">${content}</div></div>`;
+                    
+                    return `<div class="flex ${isMe ? 'justify-end' : 'justify-start'} animate-fade-in"><div class="max-w-[80%]">${content}</div></div>`;
                 }).join('');
                 container.scrollTop = container.scrollHeight;
             });
@@ -211,10 +163,23 @@
             const loader = document.getElementById('uploadSpin');
             camIcon.classList.add('hidden');
             loader.classList.remove('hidden');
-            await uploadFile(input.files[0], 'image');
-            camIcon.classList.remove('hidden');
-            loader.classList.add('hidden');
-            input.value = "";
+
+            const formData = new FormData();
+            formData.append("file", input.files[0]);
+            formData.append("upload_preset", CLOUDINARY_PRESET);
+
+            try {
+                const res = await fetch(CLOUDINARY_URL, { method: "POST", body: formData });
+                const data = await res.json();
+                if (data.secure_url) {
+                    db.ref(`chats/${chatKey}`).push({ senderId: myUid, text: data.secure_url, type: 'image', timestamp: Date.now() });
+                }
+            } catch (e) { alert("Error uploading!"); }
+            finally {
+                camIcon.classList.remove('hidden');
+                loader.classList.add('hidden');
+                input.value = "";
+            }
         }
 
         function sendMsg() {
