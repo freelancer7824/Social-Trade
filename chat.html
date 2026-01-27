@@ -10,7 +10,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
     <style>
-        body { user-select: none; -webkit-tap-highlight-color: transparent; background-color: #fff; overflow: hidden; }
+        body { user-select: none; -webkit-tap-highlight-color: transparent; background-color: #fff; overflow: hidden; font-family: sans-serif; }
         #messages::-webkit-scrollbar { width: 4px; }
         #messages::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
         
@@ -23,9 +23,10 @@
         .upload-loader { border: 2px solid #f3f3f3; border-top: 2px solid #3b82f6; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         
-        /* Voice styles */
-        .recording-active { color: #ef4444; animation: pulse 1s infinite; }
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+        .recording-active { color: #ef4444; animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
+        
+        audio { height: 35px; max-width: 200px; border-radius: 20px; }
     </style>
 </head>
 <body class="max-w-[500px] mx-auto h-screen flex flex-col bg-white">
@@ -34,7 +35,7 @@
         <i class="fas fa-arrow-left text-blue-500 text-lg cursor-pointer p-1" onclick="window.history.back()"></i>
         <img id="headPic" class="w-10 h-10 rounded-full object-cover border" src="https://ui-avatars.com/api/?name=User">
         <div class="flex-1">
-            <h2 id="headName" class="font-bold text-[15px] text-gray-900 flex items-center">Loading...</h2>
+            <h2 id="headName" class="font-bold text-[15px] text-gray-900">Loading...</h2>
             <div id="headStatus" class="text-[10px] flex items-center gap-1 text-gray-400">
                 <span id="statusDot" class="w-2.5 h-2.5 rounded-full bg-gray-300"></span>
                 <span id="statusText">Checking...</span>
@@ -44,9 +45,12 @@
 
     <div id="messages" class="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50"></div>
 
-    <div id="voiceStatus" class="hidden px-4 py-2 bg-blue-50 text-blue-600 text-xs flex justify-between items-center border-t">
-        <span><i class="fas fa-microphone mr-2"></i> Recording... <span id="timer">0s</span></span>
-        <button onclick="stopAndCancel()" class="text-red-500 font-bold">Cancel</button>
+    <div id="voiceStatus" class="hidden px-4 py-3 bg-blue-50 text-blue-600 text-sm flex justify-between items-center border-t animate-pulse">
+        <span class="flex items-center gap-2">
+            <i class="fas fa-microphone text-red-500"></i> 
+            Recording... <span id="timer" class="font-mono font-bold">0s</span>
+        </span>
+        <button onclick="stopAndCancel()" class="text-red-500 font-bold px-2">Cancel</button>
     </div>
 
     <div class="p-3 border-t bg-white flex gap-2 items-center">
@@ -73,7 +77,8 @@
     </div>
 
     <script>
-        const CLOUDINARY_URL = "https://api.cloudinary.com/v1_1/dhvtgzy5x/auto/upload"; // Changed to auto for audio
+        // --- CONFIGURATION ---
+        const CLOUDINARY_URL = "https://api.cloudinary.com/v1_1/dhvtgzy5x/auto/upload";
         const CLOUDINARY_PRESET = "Rosenews"; 
 
         const firebaseConfig = { 
@@ -88,12 +93,13 @@
         const receiverId = urlParams.get('uid');
         let myUid = "", chatKey = "";
 
-        // Voice Recording Variables
+        // --- VOICE VARIABLES ---
         let mediaRecorder;
         let audioChunks = [];
         let timerInterval;
         let seconds = 0;
         let isRecording = false;
+        let shouldUpload = false;
 
         auth.onAuthStateChanged(user => {
             if (user && receiverId) {
@@ -112,7 +118,7 @@
             });
             db.ref(`status/${receiverId}`).on('value', s => {
                 const data = s.val();
-                const isOnline = data && (data.state === 'online' || Date.now() < data.last);
+                const isOnline = data && (data.state === 'online');
                 document.getElementById('statusText').innerText = isOnline ? "Active now" : "Offline";
                 document.getElementById('statusDot').className = `w-2.5 h-2.5 rounded-full ${isOnline ? 'bg-green-500 shadow-[0_0_5px_#22c55e]' : 'bg-gray-300'}`;
             });
@@ -125,129 +131,118 @@
                 container.innerHTML = Object.values(msgs).map(m => {
                     const isMe = m.senderId === myUid;
                     let content = "";
-                    
                     if(m.type === 'image') {
                         content = `<div class="img-container" onclick="openFullImage('${m.text}')"><img src="${m.text}" loading="lazy"></div>`;
                     } else if(m.type === 'voice') {
-                        content = `<div class="flex items-center gap-2 p-2">
-                                    <audio controls class="h-8 w-48"><source src="${m.text}" type="audio/mpeg"></audio>
-                                   </div>`;
+                        content = `<div class="flex items-center bg-white p-1 rounded-full shadow-sm border"><audio controls src="${m.text}"></audio></div>`;
                     } else {
                         content = `<div class="px-4 py-2.5 rounded-2xl text-[14px] shadow-sm ${isMe ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white text-gray-800 border border-gray-100 rounded-bl-none'}">${m.text}</div>`;
                     }
-                    
-                    return `<div class="flex ${isMe ? 'justify-end' : 'justify-start'}"><div class="max-w-[80%]">${content}</div></div>`;
+                    return `<div class="flex ${isMe ? 'justify-end' : 'justify-start'}"><div class="max-w-[85%]">${content}</div></div>`;
                 }).join('');
                 container.scrollTop = container.scrollHeight;
             });
         }
 
-        // --- Voice Logic Start ---
-        // ... (আগের CSS এবং HTML অপরিবর্তিত থাকবে, শুধু স্ক্রিপ্ট নিচের অংশটুকু পরিবর্তন করুন)
-
-async function toggleRecording() {
-    if (!isRecording) {
-        try {
-            // ইউজারের পারমিশন চেক এবং রেকর্ডিং শুরু
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            startRecording(stream);
-        } catch (err) {
-            alert("Microphone permission denied! Please enable it in settings.");
+        // --- VOICE LOGIC ---
+        async function toggleRecording() {
+            if (!isRecording) {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    startRecording(stream);
+                } catch (err) {
+                    alert("Please allow microphone permission to send voice messages.");
+                }
+            } else {
+                stopAndSend();
+            }
         }
-    } else {
-        // রেকর্ডিং চলাকালীন আবার ক্লিক করলে বন্ধ হবে এবং সেন্ড হবে
-        stopAndSend();
-    }
-}
 
-function startRecording(stream) {
-    mediaRecorder = new MediaRecorder(stream);
-    audioChunks = [];
-    isRecording = true;
-    seconds = 0;
-    
-    mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
-    mediaRecorder.onstop = async () => {
-        // যদি ক্যানসেল করা না হয়, তবেই আপলোড হবে
-        if (audioChunks.length > 0 && isRecording === false && shouldUpload === true) {
-            const audioBlob = new Blob(audioChunks, { type: 'audio/mp3' });
-            uploadAudio(audioBlob);
+        function startRecording(stream) {
+            mediaRecorder = new MediaRecorder(stream);
+            audioChunks = [];
+            isRecording = true;
+            shouldUpload = true;
+            seconds = 0;
+
+            mediaRecorder.ondataavailable = e => { if(e.data.size > 0) audioChunks.push(e.data); };
+            
+            mediaRecorder.onstop = async () => {
+                if (shouldUpload && audioChunks.length > 0) {
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/mp3' });
+                    uploadAudio(audioBlob);
+                }
+                stream.getTracks().forEach(track => track.stop());
+            };
+
+            mediaRecorder.start();
+            document.getElementById('voiceStatus').classList.remove('hidden');
+            document.getElementById('voiceBtn').classList.add('recording-active');
+            
+            timerInterval = setInterval(() => {
+                seconds++;
+                document.getElementById('timer').innerText = seconds + "s";
+                if (seconds >= 60) stopAndSend();
+            }, 1000);
         }
-        stream.getTracks().forEach(track => track.stop());
-    };
-    
-    mediaRecorder.start();
-    document.getElementById('voiceStatus').classList.remove('hidden');
-    document.getElementById('voiceBtn').classList.add('recording-active');
-    shouldUpload = true; // ফ্ল্যাগ সেট করা হলো
-    
-    timerInterval = setInterval(() => {
-        seconds++;
-        document.getElementById('timer').innerText = seconds + "s";
-        if (seconds >= 60) stopAndSend(); // ১ মিনিট পর অটো স্টপ
-    }, 1000);
-}
 
-// গ্লোবাল ভেরিয়েবল
-let shouldUpload = false;
+        function stopAndSend() {
+            if (isRecording) {
+                shouldUpload = true;
+                isRecording = false;
+                mediaRecorder.stop();
+                resetUI();
+            }
+        }
 
-function stopAndSend() {
-    if (!isRecording) return;
-    shouldUpload = true;
-    isRecording = false; // flag change before stop
-    mediaRecorder.stop();
-    resetUI();
-}
+        function stopAndCancel() {
+            if (isRecording) {
+                shouldUpload = false;
+                isRecording = false;
+                mediaRecorder.stop();
+                resetUI();
+            }
+        }
 
-function stopAndCancel() {
-    shouldUpload = false;
-    isRecording = false;
-    mediaRecorder.stop();
-    resetUI();
-}
+        function resetUI() {
+            clearInterval(timerInterval);
+            document.getElementById('voiceStatus').classList.add('hidden');
+            document.getElementById('voiceBtn').classList.remove('recording-active');
+            document.getElementById('timer').innerText = "0s";
+        }
 
-function resetUI() {
-    clearInterval(timerInterval);
-    document.getElementById('voiceStatus').classList.add('hidden');
-    document.getElementById('voiceBtn').classList.remove('recording-active');
-}
+        async function uploadAudio(blob) {
+            const formData = new FormData();
+            formData.append("file", blob);
+            formData.append("upload_preset", CLOUDINARY_PRESET);
+            try {
+                const res = await fetch(CLOUDINARY_URL, { method: "POST", body: formData });
+                const data = await res.json();
+                if (data.secure_url) {
+                    db.ref(`chats/${chatKey}`).push({ senderId: myUid, text: data.secure_url, type: 'voice', timestamp: Date.now() });
+                }
+            } catch (e) { alert("Voice send failed!"); }
+        }
 
-// মূল Send Button এ এই লজিকটি যোগ করুন
-function sendMsg() {
-    const input = document.getElementById('msgInput');
-    const txt = input.value.trim();
-    
-    // যদি ভয়েস রেকর্ডিং চলতে থাকে, তবে সেন্ড বাটনে চাপ দিলে ভয়েস সেন্ড হবে
-    if (isRecording) {
-        stopAndSend();
-        return;
-    }
-    
-    // টেক্সট মেসেজ পাঠানোর জন্য
-    if (!txt) return;
-    db.ref(`chats/${chatKey}`).push({
-        senderId: myUid,
-        text: txt,
-        type: 'text',
-        timestamp: Date.now()
-    });
-    input.value = "";
-}
+        // --- TEXT & IMAGE LOGIC ---
+        function sendMsg() {
+            const input = document.getElementById('msgInput');
+            const txt = input.value.trim();
 
-// ... (বাকি আপলোড ফাংশন এবং ফায়ারবেস লজিক একই থাকবে)
-        // --- Voice Logic End ---
+            if (isRecording) { // If recording, send the voice
+                stopAndSend();
+                return;
+            }
 
-        function openFullImage(url) {
-            document.getElementById('fullImg').src = url;
-            document.getElementById('imgModal').style.display = 'flex';
+            if(!txt) return;
+            db.ref(`chats/${chatKey}`).push({ senderId: myUid, text: txt, type: 'text', timestamp: Date.now() });
+            input.value = "";
         }
 
         async function uploadToCloudinary(input) {
             if (!input.files[0]) return;
-            const camIcon = document.getElementById('camIcon');
-            const loader = document.getElementById('uploadSpin');
-            camIcon.classList.add('hidden');
-            loader.classList.remove('hidden');
+            document.getElementById('camIcon').classList.add('hidden');
+            document.getElementById('uploadSpin').classList.remove('hidden');
 
             const formData = new FormData();
             formData.append("file", input.files[0]);
@@ -259,20 +254,17 @@ function sendMsg() {
                 if (data.secure_url) {
                     db.ref(`chats/${chatKey}`).push({ senderId: myUid, text: data.secure_url, type: 'image', timestamp: Date.now() });
                 }
-            } catch (e) { alert("Error uploading!"); }
+            } catch (e) { alert("Upload failed!"); }
             finally {
-                camIcon.classList.remove('hidden');
-                loader.classList.add('hidden');
+                document.getElementById('camIcon').classList.remove('hidden');
+                document.getElementById('uploadSpin').classList.add('hidden');
                 input.value = "";
             }
         }
 
-        function sendMsg() {
-            const input = document.getElementById('msgInput');
-            const txt = input.value.trim();
-            if(!txt) return;
-            db.ref(`chats/${chatKey}`).push({ senderId: myUid, text: txt, type: 'text', timestamp: Date.now() });
-            input.value = "";
+        function openFullImage(url) {
+            document.getElementById('fullImg').src = url;
+            document.getElementById('imgModal').style.display = 'flex';
         }
     </script>
 </body>
