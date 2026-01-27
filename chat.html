@@ -14,53 +14,19 @@
         #messages::-webkit-scrollbar { width: 4px; }
         #messages::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
         
-        /* Messenger Style Image Box */
-        .img-container { 
-            width: 220px; 
-            height: 280px; 
-            border-radius: 18px; 
-            overflow: hidden; 
-            background: #f0f0f0;
-            cursor: pointer;
-            border: 1px solid #eee;
-        }
-        .img-container img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            display: block;
-        }
+        .img-container { width: 220px; height: 280px; border-radius: 18px; overflow: hidden; background: #f0f0f0; cursor: pointer; border: 1px solid #eee; }
+        .img-container img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
-        /* Image Full Screen Modal */
-        #imgModal {
-            display: none;
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.95);
-            z-index: 9999;
-            justify-content: center;
-            align-items: center;
-        }
+        #imgModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 9999; justify-content: center; align-items: center; }
         #imgModal img { max-width: 95%; max-height: 85%; border-radius: 8px; }
 
         .upload-loader { border: 2px solid #f3f3f3; border-top: 2px solid #3b82f6; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        /* Voice styles */
+        .recording-active { color: #ef4444; animation: pulse 1s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
     </style>
-
-    <script>
-        // 🔒 Advanced Protection
-        document.addEventListener('contextmenu', e => e.preventDefault());
-        document.onkeydown = function(e) {
-            if (e.keyCode == 123 || (e.ctrlKey && e.shiftKey && (e.keyCode == 73 || e.keyCode == 74 || e.keyCode == 67)) || (e.ctrlKey && e.keyCode == 85)) return false;
-        };
-        // Disable DevTools Detection
-        setInterval(() => {
-            const before = new Date().getTime();
-            debugger;
-            const after = new Date().getTime();
-            if (after - before > 100) window.location.reload();
-        }, 100);
-    </script>
 </head>
 <body class="max-w-[500px] mx-auto h-screen flex flex-col bg-white">
 
@@ -78,14 +44,27 @@
 
     <div id="messages" class="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50"></div>
 
+    <div id="voiceStatus" class="hidden px-4 py-2 bg-blue-50 text-blue-600 text-xs flex justify-between items-center border-t">
+        <span><i class="fas fa-microphone mr-2"></i> Recording... <span id="timer">0s</span></span>
+        <button onclick="stopAndCancel()" class="text-red-500 font-bold">Cancel</button>
+    </div>
+
     <div class="p-3 border-t bg-white flex gap-2 items-center">
         <label class="p-2 cursor-pointer active:scale-90 transition">
             <i class="fas fa-image text-blue-500 text-xl" id="camIcon"></i>
             <div id="uploadSpin" class="upload-loader hidden"></div>
             <input type="file" id="imageInput" accept="image/*" class="hidden" onchange="uploadToCloudinary(this)">
         </label>
+        
+        <button id="voiceBtn" onclick="toggleRecording()" class="p-2 text-blue-500 active:scale-90 transition">
+            <i class="fas fa-microphone text-xl"></i>
+        </button>
+
         <input id="msgInput" type="text" placeholder="Aa" class="flex-1 bg-gray-100 rounded-full px-5 py-2.5 outline-none text-sm border focus:border-blue-300 transition" autocomplete="off" onkeypress="if(event.key==='Enter')sendMsg()">
-        <button onclick="sendMsg()" class="text-blue-500 p-2 font-bold active:scale-90 transition"><i class="fas fa-paper-plane text-xl"></i></button>
+        
+        <button onclick="sendMsg()" id="sendBtn" class="text-blue-500 p-2 font-bold active:scale-90 transition">
+            <i class="fas fa-paper-plane text-xl"></i>
+        </button>
     </div>
 
     <div id="imgModal" onclick="this.style.display='none'">
@@ -94,7 +73,7 @@
     </div>
 
     <script>
-        const CLOUDINARY_URL = "https://api.cloudinary.com/v1_1/dhvtgzy5x/image/upload";
+        const CLOUDINARY_URL = "https://api.cloudinary.com/v1_1/dhvtgzy5x/auto/upload"; // Changed to auto for audio
         const CLOUDINARY_PRESET = "Rosenews"; 
 
         const firebaseConfig = { 
@@ -108,6 +87,13 @@
         const urlParams = new URLSearchParams(window.location.search);
         const receiverId = urlParams.get('uid');
         let myUid = "", chatKey = "";
+
+        // Voice Recording Variables
+        let mediaRecorder;
+        let audioChunks = [];
+        let timerInterval;
+        let seconds = 0;
+        let isRecording = false;
 
         auth.onAuthStateChanged(user => {
             if (user && receiverId) {
@@ -142,15 +128,98 @@
                     
                     if(m.type === 'image') {
                         content = `<div class="img-container" onclick="openFullImage('${m.text}')"><img src="${m.text}" loading="lazy"></div>`;
+                    } else if(m.type === 'voice') {
+                        content = `<div class="flex items-center gap-2 p-2">
+                                    <audio controls class="h-8 w-48"><source src="${m.text}" type="audio/mpeg"></audio>
+                                   </div>`;
                     } else {
                         content = `<div class="px-4 py-2.5 rounded-2xl text-[14px] shadow-sm ${isMe ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white text-gray-800 border border-gray-100 rounded-bl-none'}">${m.text}</div>`;
                     }
                     
-                    return `<div class="flex ${isMe ? 'justify-end' : 'justify-start'} animate-fade-in"><div class="max-w-[80%]">${content}</div></div>`;
+                    return `<div class="flex ${isMe ? 'justify-end' : 'justify-start'}"><div class="max-w-[80%]">${content}</div></div>`;
                 }).join('');
                 container.scrollTop = container.scrollHeight;
             });
         }
+
+        // --- Voice Logic Start ---
+        async function toggleRecording() {
+            if (!isRecording) {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    startRecording(stream);
+                } catch (err) {
+                    alert("Microphone permission denied!");
+                }
+            } else {
+                stopAndSend();
+            }
+        }
+
+        function startRecording(stream) {
+            mediaRecorder = new MediaRecorder(stream);
+            audioChunks = [];
+            isRecording = true;
+            seconds = 0;
+            
+            mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+            mediaRecorder.onstop = async () => {
+                if (audioChunks.length > 0 && isRecording) {
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/mp3' });
+                    uploadAudio(audioBlob);
+                }
+                stream.getTracks().forEach(track => track.stop());
+            };
+
+            mediaRecorder.start();
+            document.getElementById('voiceStatus').classList.remove('hidden');
+            document.getElementById('voiceBtn').classList.add('recording-active');
+            
+            timerInterval = setInterval(() => {
+                seconds++;
+                document.getElementById('timer').innerText = seconds + "s";
+                if (seconds >= 60) stopAndSend();
+            }, 1000);
+        }
+
+        function stopAndSend() {
+            if (!isRecording) return;
+            mediaRecorder.stop();
+            resetUI();
+        }
+
+        function stopAndCancel() {
+            isRecording = false; // Prevents the onstop from uploading
+            mediaRecorder.stop();
+            resetUI();
+        }
+
+        function resetUI() {
+            clearInterval(timerInterval);
+            isRecording = false;
+            document.getElementById('voiceStatus').classList.add('hidden');
+            document.getElementById('voiceBtn').classList.remove('recording-active');
+        }
+
+        async function uploadAudio(blob) {
+            const formData = new FormData();
+            formData.append("file", blob);
+            formData.append("upload_preset", CLOUDINARY_PRESET);
+
+            try {
+                const res = await fetch(CLOUDINARY_URL, { method: "POST", body: formData });
+                const data = await res.json();
+                if (data.secure_url) {
+                    db.ref(`chats/${chatKey}`).push({ 
+                        senderId: myUid, 
+                        text: data.secure_url, 
+                        type: 'voice', 
+                        timestamp: Date.now() 
+                    });
+                }
+            } catch (e) { console.error("Upload failed", e); }
+        }
+        // --- Voice Logic End ---
 
         function openFullImage(url) {
             document.getElementById('fullImg').src = url;
