@@ -9,31 +9,25 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
-    
     <style>
         body { user-select: none; -webkit-tap-highlight-color: transparent; background-color: #fff; overflow: hidden; font-family: sans-serif; }
         #messages::-webkit-scrollbar { width: 4px; }
         #messages::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+        
         .img-container { width: 220px; height: 280px; border-radius: 18px; overflow: hidden; background: #f0f0f0; cursor: pointer; border: 1px solid #eee; }
         .img-container img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
         #imgModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 9999; justify-content: center; align-items: center; }
         #imgModal img { max-width: 95%; max-height: 85%; border-radius: 8px; }
+
         .upload-loader { border: 2px solid #f3f3f3; border-top: 2px solid #3b82f6; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
         .recording-active { color: #ef4444; animation: pulse 1.5s infinite; }
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
+        
         audio { height: 35px; max-width: 200px; border-radius: 20px; }
     </style>
-
-    <script>
-        // 🛡️ Safe Anti-Inspect (বুট লুপ হবে না)
-        document.addEventListener('contextmenu', e => e.preventDefault());
-        document.onkeydown = function(e) {
-            if (e.keyCode == 123 || (e.ctrlKey && e.shiftKey && [73, 74, 67].includes(e.keyCode)) || (e.ctrlKey && e.keyCode == 85)) {
-                return false;
-            }
-        };
-    </script>
 </head>
 <body class="max-w-[500px] mx-auto h-screen flex flex-col bg-white">
 
@@ -78,10 +72,12 @@
     </div>
 
     <div id="imgModal" onclick="this.style.display='none'">
+        <span class="absolute top-5 right-5 text-white text-2xl"><i class="fas fa-times"></i></span>
         <img id="fullImg" src="">
     </div>
 
     <script>
+        // --- CONFIGURATION ---
         const CLOUDINARY_URL = "https://api.cloudinary.com/v1_1/dhvtgzy5x/auto/upload";
         const CLOUDINARY_PRESET = "Rosenews"; 
 
@@ -97,6 +93,59 @@
         const receiverId = urlParams.get('uid');
         let myUid = "", chatKey = "";
 
+        // --- LOCAL STORAGE & CACHE HELPERS ---
+        const LS_CHAT_KEY = () => `chat_${chatKey}`;
+        
+        // Function to convert Image URL to Base64 for LocalStorage Caching
+        function cacheImage(url) {
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.crossOrigin = "Anonymous";
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 80; // Thumbnail size for chat list to save space
+                    canvas.height = 100;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    try {
+                        const dataURL = canvas.toDataURL('image/webp', 0.6);
+                        localStorage.setItem('img_' + url, dataURL);
+                        resolve(dataURL);
+                    } catch (e) { resolve(url); } // Fallback if tainted canvas
+                };
+                img.onerror = () => resolve(url); // Fallback on error
+                img.src = url;
+            });
+        }
+
+        function getLocalChats() {
+            const data = localStorage.getItem(LS_CHAT_KEY());
+            return data ? JSON.parse(data) : {};
+        }
+
+        function saveLocalChats(chats) {
+            try {
+                localStorage.setItem(LS_CHAT_KEY(), JSON.stringify(chats));
+            } catch(e) {
+                // If LocalStorage is full, clear old image caches
+                clearOldImageCache();
+                try { localStorage.setItem(LS_CHAT_KEY(), JSON.stringify(chats)); } catch(e2) {}
+            }
+        }
+
+        function clearOldImageCache() {
+            let itemsRemoved = 0;
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key.startsWith('img_') && itemsRemoved < 10) {
+                    localStorage.removeItem(key);
+                    itemsRemoved++;
+                    i--; // Adjust index after removal
+                }
+            }
+        }
+
+        // --- VOICE VARIABLES ---
         let mediaRecorder, audioChunks = [], timerInterval, seconds = 0, isRecording = false, shouldUpload = false;
 
         auth.onAuthStateChanged(user => {
@@ -122,39 +171,91 @@
             });
         }
 
+        // --- SMART MESSAGE LOADING (FIREBASE + LOCAL STORAGE) ---
         function loadMessages() {
-            db.ref(`chats/${chatKey}`).on('value', snap => {
-                const msgs = snap.val() || {};
-                const container = document.getElementById('messages');
-                container.innerHTML = Object.values(msgs).map(m => {
-                    const isMe = m.senderId === myUid;
-                    let content = "";
-                    if(m.type === 'image') {
-                        content = `<div class="img-container" onclick="openFullImage('${m.text}')"><img src="${m.text}" loading="lazy"></div>`;
-                    } else if(m.type === 'voice') {
-                        content = `<div class="flex items-center bg-white p-1 rounded-full shadow-sm border"><audio controls src="${m.text}"></audio></div>`;
+            const container = document.getElementById('messages');
+            
+            // 1. Load from LocalStorage instantly (Offline support & zero data charge)
+            const localChats = getLocalChats();
+            if (Object.keys(localChats).length > 0) {
+                renderMessages(localChats);
+            }
+
+            // 2. Listen to Firebase for NEW messages only (Incremental Update)
+            db.ref(`chats/${chatKey}`).on('child_added', snap => {
+                const msgKey = snap.key;
+                const msgData = snap.val();
+                
+                const currentLocalChats = getLocalChats();
+                
+                // If the message is new (not in local storage)
+                if (!currentLocalChats[msgKey]) {
+                    currentLocalChats[msgKey] = msgData;
+                    saveLocalChats(currentLocalChats); // Save only the new update
+                    
+                    // Cache Image Locally if it's an image
+                    if (msgData.type === 'image' && msgData.text) {
+                        cacheImage(msgData.text).then(() => {
+                            renderMessages(getLocalChats()); // Re-render after thumbnail cache
+                        });
                     } else {
-                        content = `<div class="px-4 py-2.5 rounded-2xl text-[14px] shadow-sm ${isMe ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white text-gray-800 border border-gray-100 rounded-bl-none'}">${m.text}</div>`;
+                        renderMessages(currentLocalChats);
                     }
-                    return `<div class="flex ${isMe ? 'justify-end' : 'justify-start'}"><div class="max-w-[85%]">${content}</div></div>`;
-                }).join('');
-                container.scrollTop = container.scrollHeight;
+                }
             });
         }
 
+        function renderMessages(msgs) {
+            const container = document.getElementById('messages');
+            // Sort messages by timestamp to maintain order
+            const sortedMsgs = Object.values(msgs).sort((a, b) => a.timestamp - b.timestamp);
+            
+            container.innerHTML = sortedMsgs.map(m => {
+                const isMe = m.senderId === myUid;
+                let content = "";
+                
+                if(m.type === 'image') {
+                    // Check if thumbnail is cached locally
+                    const cachedThumb = localStorage.getItem('img_' + m.text);
+                    // Full image URL with Facebook-like compression (q_auto, f_auto, w_600)
+                    const fullImageUrl = m.text.includes('cloudinary.com') ? m.text.replace('/upload/', '/upload/q_auto,f_auto,w_600/') : m.text;
+                    const imgSrc = cachedThumb || fullImageUrl;
+                    
+                    content = `<div class="img-container" onclick="openFullImage('${fullImageUrl}')"><img src="${imgSrc}" loading="lazy"></div>`;
+                } else if(m.type === 'voice') {
+                    content = `<div class="flex items-center bg-white p-1 rounded-full shadow-sm border"><audio controls src="${m.text}"></audio></div>`;
+                } else {
+                    content = `<div class="px-4 py-2.5 rounded-2xl text-[14px] shadow-sm ${isMe ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white text-gray-800 border border-gray-100 rounded-bl-none'}">${m.text}</div>`;
+                }
+                return `<div class="flex ${isMe ? 'justify-end' : 'justify-start'}"><div class="max-w-[85%]">${content}</div></div>`;
+            }).join('');
+            
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // --- VOICE LOGIC ---
         async function toggleRecording() {
             if (!isRecording) {
                 try {
                     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                     startRecording(stream);
-                } catch (err) { alert("Mic permission error!"); }
-            } else { stopAndSend(); }
+                } catch (err) {
+                    alert("Please allow microphone permission to send voice messages.");
+                }
+            } else {
+                stopAndSend();
+            }
         }
 
         function startRecording(stream) {
             mediaRecorder = new MediaRecorder(stream);
-            audioChunks = []; isRecording = true; shouldUpload = true; seconds = 0;
+            audioChunks = [];
+            isRecording = true;
+            shouldUpload = true;
+            seconds = 0;
+
             mediaRecorder.ondataavailable = e => { if(e.data.size > 0) audioChunks.push(e.data); };
+            
             mediaRecorder.onstop = async () => {
                 if (shouldUpload && audioChunks.length > 0) {
                     const audioBlob = new Blob(audioChunks, { type: 'audio/mp3' });
@@ -162,9 +263,11 @@
                 }
                 stream.getTracks().forEach(track => track.stop());
             };
+
             mediaRecorder.start();
             document.getElementById('voiceStatus').classList.remove('hidden');
             document.getElementById('voiceBtn').classList.add('recording-active');
+            
             timerInterval = setInterval(() => {
                 seconds++;
                 document.getElementById('timer').innerText = seconds + "s";
@@ -174,15 +277,19 @@
 
         function stopAndSend() {
             if (isRecording) {
-                shouldUpload = true; isRecording = false;
-                mediaRecorder.stop(); resetUI();
+                shouldUpload = true;
+                isRecording = false;
+                mediaRecorder.stop();
+                resetUI();
             }
         }
 
         function stopAndCancel() {
             if (isRecording) {
-                shouldUpload = false; isRecording = false;
-                mediaRecorder.stop(); resetUI();
+                shouldUpload = false;
+                isRecording = false;
+                mediaRecorder.stop();
+                resetUI();
             }
         }
 
@@ -206,10 +313,16 @@
             } catch (e) { alert("Voice send failed!"); }
         }
 
+        // --- TEXT & IMAGE LOGIC ---
         function sendMsg() {
             const input = document.getElementById('msgInput');
             const txt = input.value.trim();
-            if (isRecording) { stopAndSend(); return; }
+
+            if (isRecording) { // If recording, send the voice
+                stopAndSend();
+                return;
+            }
+
             if(!txt) return;
             db.ref(`chats/${chatKey}`).push({ senderId: myUid, text: txt, type: 'text', timestamp: Date.now() });
             input.value = "";
@@ -219,9 +332,11 @@
             if (!input.files[0]) return;
             document.getElementById('camIcon').classList.add('hidden');
             document.getElementById('uploadSpin').classList.remove('hidden');
+
             const formData = new FormData();
             formData.append("file", input.files[0]);
             formData.append("upload_preset", CLOUDINARY_PRESET);
+
             try {
                 const res = await fetch(CLOUDINARY_URL, { method: "POST", body: formData });
                 const data = await res.json();
