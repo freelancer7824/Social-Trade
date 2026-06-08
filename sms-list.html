@@ -111,8 +111,19 @@
     const blueBadgeSvg = `<svg style="width:15px; height:15px; display:inline-block;" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5213 2.62368C11.3147 1.75255 12.6853 1.75255 13.4787 2.62368L14.4989 3.74391C14.8326 4.11041 15.3059 4.30642 15.8039 4.28394L17.3255 4.21526C18.5089 4.16179 19.5041 5.15705 19.4506 6.34045L19.3819 7.86208C19.3595 8.36012 19.5555 8.83342 19.922 9.16713L21.0422 10.1873C21.9133 10.9807 21.9133 12.3513 21.0422 13.1447L19.922 14.1649C19.5555 14.4986 19.3595 14.9719 19.3819 15.4699L19.4506 16.9915C19.5041 18.1749 18.5089 19.1702 17.3255 19.1167L15.8039 19.048C15.3059 19.0255 14.8326 19.2216 14.4989 19.5881L13.4787 20.7083C12.6853 21.5794 11.3147 21.5794 10.5213 20.7083L9.50106 19.5881C9.16735 19.2216 8.69405 19.0255 8.19601 19.048L6.67442 19.1167C5.49103 19.1702 4.49577 18.1749 4.54924 16.9915L4.61792 15.4699C4.6404 14.9719 4.44439 14.4986 4.07789 14.1649L2.95771 13.1447C2.08658 12.3513 2.08658 10.9807 2.95771 10.1873L4.07789 9.16713C4.44439 8.83342 4.6404 8.36012 4.61792 7.86208L4.54924 6.34045C4.49577 5.15705 5.49103 4.16179 6.67442 4.21526L8.19601 4.28394C8.69405 4.30642 9.16735 4.11041 9.50106 3.74391L10.5213 2.62368Z" fill="#1D9BF0"/><path d="M10 12.5L11.5 14L15 10.5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
     auth.onAuthStateChanged(user => {
-        if (user) { myUid = user.uid; initInbox(); } 
-        else { window.parent.location.href = "login.html"; }
+        if (user) { 
+            myUid = user.uid; 
+            
+            // Clear Old LocalStorage Cache to prevent showing wrong names (One-time fix)
+            if(localStorage.getItem("st_cache_v2") !== "true") {
+                localStorage.removeItem(LS_CHAT_KEY);
+                localStorage.setItem("st_cache_v2", "true");
+            }
+            
+            initInbox(); 
+        } else { 
+            window.parent.location.href = "login.html"; 
+        }
     });
 
     async function initInbox() {
@@ -147,23 +158,31 @@
                 const lastMsgData = lSnap.val() || {};
                 const lastMsg = Object.values(lastMsgData)[0] || {};
                 
-                const otherUid = key.replace(myUid, "").replace("_", "");
+                // 🛠️ FIXED: Properly extract otherUid by splitting the chat key
+                const uids = key.split('_');
+                const otherUid = uids[0] === myUid ? uids[1] : uids[0];
                 
                 // Profile Sync: Check LS first, else fetch Firebase
                 let profile = {};
                 let lsProfile = lsChats[key] ? lsChats[key].profileData : null;
                 
-                if (lsProfile) {
+                if (lsProfile && lsProfile.fullName) {
                     profile = lsProfile;
                 } else {
                     const uSnap = await db.ref(`user-info/${otherUid}/profile`).once('value');
                     profile = uSnap.val() || {};
                 }
 
-                let displayText = lastMsg ? lastMsg.text : "";
+                // 🛠️ FIXED: Message text showing logic (If I sent the last message, show "You: ")
+                let displayText = "";
                 if (lastMsg) {
                     if (lastMsg.type === 'image') displayText = "📷 Photo"; 
-                    else if (lastMsg.type === 'voice') displayText = "🎤 Voice Message"; 
+                    else if (lastMsg.type === 'voice') displayText = "🎤 Voice Message";
+                    else displayText = lastMsg.text || "";
+
+                    if (lastMsg.senderId === myUid) {
+                        displayText = "You: " + displayText;
+                    }
                 }
 
                 // Image LocalStorage Sync
@@ -191,7 +210,7 @@
             if (JSON.stringify(freshData.map(c => c.chatKey)) !== JSON.stringify(allChatData.map(c => c.chatKey))) needsRender = true;
             freshData.forEach(fresh => {
                 const existing = allChatData.find(c => c.chatKey === fresh.chatKey);
-                if (!existing || existing.time !== fresh.time || existing.pic !== fresh.pic) needsRender = true;
+                if (!existing || existing.time !== fresh.time || existing.pic !== fresh.pic || existing.name !== fresh.name) needsRender = true;
             });
 
             if (needsRender) {
