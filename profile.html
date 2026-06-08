@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>User Profile - SocialTrade</title>
+    <title>User Profile - SocialTrade Lite</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
@@ -15,46 +15,56 @@
     <style>
         body { background-color: #f0f2f5; font-family: 'Segoe UI', sans-serif; user-select: none; -webkit-tap-highlight-color: transparent; }
         .post-card { background: white; border-radius: 8px; margin-bottom: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); border: 1px solid #dddfe2; }
-        .colored-content { min-height: 200px; display: flex; align-items: center; justify-content: center; padding: 25px; text-align: center; font-size: 1.3rem; font-weight: 800; color: white; border-radius: 4px; }
+        .colored-content { min-height: 180px; display: flex; align-items: center; justify-content: center; padding: 20px; text-align: center; font-size: 1.2rem; font-weight: 800; color: white; border-radius: 4px; }
         .profile-pic { width: 110px; height: 110px; border-radius: 50%; border: 4px solid white; margin-top: -55px; object-fit: cover; background: #eee; position: relative; }
         .comment-bubble { background: #f0f2f5; border-radius: 15px; padding: 7px 12px; max-width: 85%; }
         .status-indicator { position: absolute; bottom: 8px; right: 8px; width: 16px; height: 16px; border-radius: 50%; border: 3px solid white; background: #ccc; }
         .status-online { background: #31a24c; }
-        #coverImg { transition: opacity 0.3s ease-in; }
-        
-        /* Facebook Style Follower Section */
+        #coverImg { transition: opacity 0.2s ease-in; }
         .stat-text { color: #65676b; font-weight: 500; font-size: 13px; margin-left: 3px; }
         .purple-dot { color: #8B5CF6; font-weight: 900; margin: 0 8px; font-size: 14px; }
         .count-num { color: #050505; font-weight: 700; font-size: 14px; }
+
+        .lazy-image { opacity: 0; transition: opacity 0.3s; background: #f0f2f5; }
+        .lazy-image.loaded { opacity: 1; }
+
+        .skeleton { background: linear-gradient(90deg, #f0f2f5 25%, #e0e2e5 50%, #f0f2f5 75%); background-size: 200% 100%; animation: loading 1.5s infinite; }
+        @keyframes loading { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+        .load-more-btn { display: block; width: 100%; padding: 12px; background: white; border: 1px solid #dddfe2; border-radius: 8px; color: #1877F2; font-weight: 600; font-size: 14px; cursor: pointer; transition: background 0.2s; }
+        .load-more-btn:hover { background: #f0f2f5; }
+        .all-caught-up { text-align: center; padding: 20px 0; color: #65676b; font-size: 13px; }
+        .all-caught-up i { color: #31a24c; }
+        .cache-info { font-size: 10px; color: #b0b3b8; text-align: center; padding: 6px 0; }
+        
+        .read-more-btn { color: #1877F2; font-weight: 600; font-size: 12px; cursor: pointer; margin-left: 4px; }
+        .post-text { word-wrap: break-word; line-height: 1.4; }
+        
+        .hidden { display: none !important; }
     </style>
 </head>
 <body class="pb-10" oncontextmenu="return false;">
 
     <div id="profileWrapper" class="max-w-[500px] mx-auto">
+        <!-- Profile Header -->
         <div class="bg-white border-b pb-4 shadow-sm">
-            <div id="coverBg" class="h-40 bg-gradient-to-r from-blue-500 to-cyan-500 relative overflow-hidden">
-                <img id="coverImg" class="w-full h-full object-cover hidden">
+            <div id="coverBg" class="h-40 bg-gradient-to-r from-gray-400 to-gray-500 relative overflow-hidden">
+                <img id="coverImg" loading="lazy" class="w-full h-full object-cover hidden lazy-image">
                 <button onclick="history.back()" class="absolute top-3 left-3 text-white bg-black/30 w-8 h-8 rounded-full z-10 flex items-center justify-center"><i class="fas fa-arrow-left"></i></button>
             </div>
             
             <div class="px-4 text-center">
                 <div class="relative inline-block">
-                    <img id="userPic" src="" class="profile-pic mx-auto shadow-md">
+                    <img id="userPic" src="" loading="lazy" class="profile-pic mx-auto shadow-md bg-gray-200 lazy-image">
                     <div id="activeDot" class="status-indicator"></div>
                 </div>
                 <h2 id="userName" class="text-xl font-bold mt-2 flex items-center justify-center">Loading...</h2>
                 <p id="statusText" class="text-[10px] font-bold uppercase mb-2 text-gray-400">Offline</p>
                 
                 <div class="flex items-center justify-center mb-1">
-                    <div>
-                        <span id="fCount" class="count-num">0</span>
-                        <span class="stat-text">followers</span>
-                    </div>
+                    <div><span id="fCount" class="count-num">0</span><span class="stat-text">followers</span></div>
                     <span class="purple-dot">•</span>
-                    <div>
-                        <span id="followingCount" class="count-num">0</span>
-                        <span class="stat-text">following</span>
-                    </div>
+                    <div><span id="followingCount" class="count-num">0</span><span class="stat-text">following</span></div>
                 </div>
 
                 <p id="userBio" class="text-gray-500 text-sm italic mt-1">...</p>
@@ -62,34 +72,87 @@
             </div>
         </div>
 
+        <!-- Posts Section -->
         <div class="p-3">
             <h3 class="font-bold text-md text-gray-800 mb-3 border-b pb-2">Posts</h3>
             <div id="myPostsContainer"></div>
+            
+            <!-- Load More -->
+            <div id="loadMoreContainer" class="hidden mt-3">
+                <button id="loadMoreBtn" onclick="handleLoadMore()" class="load-more-btn">
+                    <i class="fas fa-spinner fa-spin hidden" id="loadMoreSpinner"></i>
+                    <span id="loadMoreText">Show More Posts</span>
+                </button>
+            </div>
+            <div id="allCaughtUp" class="hidden all-caught-up">
+                <i class="fas fa-check-circle mr-1"></i> All posts loaded
+            </div>
+            <div id="cacheInfo" class="cache-info hidden"></div>
         </div>
     </div>
 
 <script>
-    // --- Security: Prevent Inspect Element ---
-    document.addEventListener('keydown', function(e) {
-        if (e.key === "F12" || (e.ctrlKey && e.shiftKey && (e.key === "I" || e.key === "J" || e.key === "C")) || (e.ctrlKey && e.key === "u")) {
-            e.preventDefault(); return false;
-        }
-    });
-
+    // ==================== FIREBASE CONFIG ====================
     const firebaseConfig = { apiKey: "AIzaSyD1mn9MR9hyZ36Ce1lnGyJYmL6AHopScTA", authDomain: "social-media-5e6c8.firebaseapp.com", databaseURL: "https://social-media-5e6c8-default-rtdb.firebaseio.com/", projectId: "social-media-5e6c8" };
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database(), auth = firebase.auth();
 
     const blueBadge = `<svg class="inline-block w-4 h-4 ml-1 text-[#1877F2]" viewBox="0 0 24 24" fill="currentColor"><path d="M23 12l-2.44-2.79.34-3.69-3.61-.82-1.89-3.2L12 2.96 8.6 1.5 6.71 4.7l-3.61.81.34 3.7L1 12l2.44 2.79-.34 3.69 3.61.82 1.89 3.2L12 21.04l3.4 1.46 1.89-3.2 3.61-.82-.34-3.69L23 12zm-12.91 4.72l-3.8-3.81 1.48-1.48 2.32 2.33 5.85-5.87 1.48 1.48-7.33 7.35z"/></svg>`;
     
-    let targetUid = new URLSearchParams(window.location.search).get('uid'), myUid = "", userCache = {}, openComments = {};
+    // ==================== CONFIGURATION ====================
+    const POSTS_PER_PAGE = 50;
+    const CACHE = {
+        USERS: 'sb_users_v3',
+        PROFILE: 'sb_profile_',
+        POSTS: 'sb_user_posts_',
+        FOLLOWING: 'sb_following_'
+    };
 
-    function formatFollowers(num) {
-        if (num >= 1000000) return (num / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
-        if (num >= 1000) return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
-        return num;
+    // ==================== GLOBAL STATE ====================
+    let targetUid = new URLSearchParams(window.location.search).get('uid');
+    let myUid = "";
+    let userCache = {};
+    let myFollowing = {};
+    let allUserPosts = [];
+    let displayedCount = 0;
+    let hasMorePosts = true;
+    let isLoading = false;
+    let openComments = {};
+    let imageObserver = null;
+    let statusListener = null;
+    let followListener = null;
+
+    // ==================== CACHE UTILITIES ====================
+    function saveCache(key, data) {
+        try { localStorage.setItem(key, JSON.stringify(data)); } catch(e) { cleanCache(); }
+    }
+    function loadCache(key) {
+        try { const r = localStorage.getItem(key); return r ? JSON.parse(r) : null; } catch(e) { return null; }
+    }
+    function cleanCache() {
+        const keysToRemove = [];
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith('sb_')) keysToRemove.push(key);
+        }
+        keysToRemove.forEach(k => localStorage.removeItem(k));
     }
 
+    // ==================== IMAGE OPTIMIZATION ====================
+    function getOptimizedImageUrl(url, width = 300) {
+        if (!url) return '';
+        if (url.includes('cloudinary.com')) return url.replace('/upload/', `/upload/f_auto,q_80,w_${width}/`);
+        if (url.includes('ui-avatars.com')) return `${url}${url.includes('?') ? '&' : '?'}size=${Math.min(width, 128)}`;
+        return url;
+    }
+    function getLowQualityImageUrl(url) {
+        if (!url) return '';
+        if (url.includes('cloudinary.com')) return url.replace('/upload/', `/upload/f_auto,q_20,w_50/`);
+        if (url.includes('ui-avatars.com')) return `${url}${url.includes('?') ? '&' : '?'}size=50`;
+        return url;
+    }
+
+    // ==================== TIME & FORMAT ====================
     function timeAgo(ts) {
         if(!ts) return "";
         const s = Math.floor((Date.now() - ts) / 1000);
@@ -98,140 +161,485 @@
         if (s < 86400) return Math.floor(s/3600) + "h";
         return Math.floor(s/86400) + "d";
     }
+    function formatFollowers(num) {
+        if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+        if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+        return num;
+    }
 
+    // ==================== TEXT TRUNCATION ====================
+    function truncateText(text, limit = 150) {
+        if (!text) return { display: '', needsMore: false, full: '' };
+        if (text.length <= limit) return { display: text, needsMore: false, full: text };
+        return { display: text.substring(0, limit) + '...', needsMore: true, full: text };
+    }
+
+    // ==================== IMAGE LAZY LOADING ====================
+    function setupImageObserver() {
+        if (imageObserver) return;
+        imageObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const img = entry.target;
+                    const lowSrc = img.dataset.low;
+                    const normalSrc = img.dataset.normal;
+                    if (lowSrc && normalSrc) {
+                        img.src = lowSrc;
+                        img.classList.add('loaded');
+                        const fullImg = new Image();
+                        fullImg.src = normalSrc;
+                        fullImg.onload = () => { img.src = normalSrc; };
+                        imageObserver.unobserve(img);
+                    }
+                }
+            });
+        }, { rootMargin: '200px' });
+    }
+
+    function observeAllLazyImages() {
+        if (!imageObserver) return;
+        document.querySelectorAll('img[data-low]:not(.observed)').forEach(img => {
+            img.classList.add('observed');
+            imageObserver.observe(img);
+        });
+    }
+
+    // ==================== FETCH MISSING USERS ====================
+    async function fetchMissingUsers(uids) {
+        if (!uids || uids.length === 0) return;
+        const promises = uids.map(uid =>
+            db.ref(`user-info/${uid}/profile`).once('value').then(snap => {
+                if (snap.val()) userCache[uid] = snap.val();
+            }).catch(() => {})
+        );
+        await Promise.all(promises);
+        saveCache(CACHE.USERS, userCache);
+    }
+
+    // ==================== AUTH & INIT ====================
     auth.onAuthStateChanged(user => {
         if (user) {
-            myUid = user.uid; if (!targetUid) targetUid = myUid;
-            db.ref('user-info').on('value', snap => {
-                userCache = {};
-                snap.forEach(u => { userCache[u.key] = u.val().profile; });
-                loadProfile(targetUid);
-                loadPosts(targetUid);
-            });
-            const up = () => db.ref(`status/${myUid}`).set({ state: 'online', last_changed: Date.now() + 180000 });
-            up(); setInterval(up, 60000);
+            myUid = user.uid;
+            if (!targetUid) targetUid = myUid;
+            
+            setupImageObserver();
+            
+            // Load caches
+            const cachedUsers = loadCache(CACHE.USERS);
+            if (cachedUsers) userCache = cachedUsers;
+            const cachedFollowing = loadCache(CACHE.FOLLOWING + myUid);
+            if (cachedFollowing) myFollowing = cachedFollowing;
+            
+            // Step 1: Load from cache (instant)
+            loadFromCache();
+            
+            // Step 2: Fetch fresh data from Firebase
+            fetchProfileData();
+            fetchPostsData();
+            
+            // Online status
+            const goOnline = () => db.ref(`status/${myUid}`).set({ state: 'online', last_changed: Date.now() + 180000 });
+            goOnline();
+            setInterval(goOnline, 60000);
+            
             listenStatus(targetUid);
-        } else { window.location.href = "login.html"; }
+        } else {
+            window.location.href = "login.html";
+        }
     });
 
-    function loadProfile(uid) {
-        db.ref(`user-info/${uid}/profile`).on('value', snap => {
-            const d = snap.val() || {};
-            const isV = d.isVerified === true || d.isVerified === "true";
-            document.getElementById('userName').innerHTML = (d.fullName || "User") + (isV ? blueBadge : "");
-            document.getElementById('userPic').src = d.profilePic || `https://ui-avatars.com/api/?name=${d.fullName}`;
-            
-            const coverEl = document.getElementById('coverImg');
-            if(d.coverPic) { coverEl.src = d.coverPic; coverEl.classList.remove('hidden'); } 
-            else { coverEl.classList.add('hidden'); }
+    // ==================== LOAD FROM CACHE ====================
+    function loadFromCache() {
+        // Profile cache
+        const cachedProfile = loadCache(CACHE.PROFILE + targetUid);
+        if (cachedProfile) {
+            applyProfileData(cachedProfile);
+        }
+        
+        // Posts cache
+        const cachedPosts = loadCache(CACHE.POSTS + targetUid);
+        if (cachedPosts && cachedPosts.length > 0) {
+            allUserPosts = cachedPosts;
+            displayedCount = Math.min(POSTS_PER_PAGE, allUserPosts.length);
+            renderFeed(0, displayedCount, false);
+            updateLoadMoreUI();
+        } else {
+            showSkeletonLoader();
+        }
+    }
 
-            document.getElementById('userBio').innerText = d.bio || "No bio available";
-            renderButtons(uid);
-        });
+    function showSkeletonLoader() {
+        document.getElementById('myPostsContainer').innerHTML = Array(3).fill(0).map(() => `
+            <div class="post-card p-4">
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="w-8 h-8 rounded-full skeleton"></div>
+                    <div class="flex-1"><div class="h-3 skeleton rounded w-24 mb-2"></div><div class="h-2 skeleton rounded w-16"></div></div>
+                </div>
+                <div class="h-3 skeleton rounded w-full mb-2"></div>
+                <div class="h-3 skeleton rounded w-3/4 mb-4"></div>
+                <div class="h-40 skeleton rounded mb-3"></div>
+            </div>
+        `).join('');
+    }
 
-        // Load Followers
-        db.ref(`user-followers/${uid}`).on('value', s => {
+    // ==================== FETCH PROFILE DATA ====================
+    async function fetchProfileData() {
+        try {
+            const snap = await db.ref(`user-info/${targetUid}/profile`).once('value');
+            const profileData = snap.val() || {};
+            userCache[targetUid] = profileData;
+            saveCache(CACHE.USERS, userCache);
+            saveCache(CACHE.PROFILE + targetUid, profileData);
+            applyProfileData(profileData);
+        } catch(e) { console.error('Profile fetch error:', e); }
+
+        // Followers/Following count (lightweight listeners)
+        db.ref(`user-followers/${targetUid}`).on('value', s => {
             document.getElementById('fCount').innerText = formatFollowers(s.numChildren());
         });
-
-        // Load Following
-        db.ref(`user-following/${uid}`).on('value', s => {
+        db.ref(`user-following/${targetUid}`).on('value', s => {
             document.getElementById('followingCount').innerText = formatFollowers(s.numChildren());
         });
+
+        renderButtons(targetUid);
     }
 
-    // --- অন্যান্য ফাংশন আগের মতোই (Post, Comment, Like ইত্যাদি) ---
-    function loadPosts(uid) {
-        db.ref('posts').on('value', snap => {
-            let posts = [];
-            snap.forEach(c => { if(c.val().uid === uid) posts.push({id: c.key, ...c.val()}); });
-            renderFeed(posts.sort((a,b)=>b.timestamp - a.timestamp));
-        });
+    function applyProfileData(d) {
+        const isV = d.isVerified === true || d.isVerified === "true";
+        document.getElementById('userName').innerHTML = (d.fullName || "User") + (isV ? blueBadge : "");
+        
+        const userPic = document.getElementById('userPic');
+        userPic.dataset.low = getLowQualityImageUrl(d.profilePic || `https://ui-avatars.com/api/?name=${d.fullName}`, 50);
+        userPic.dataset.normal = getOptimizedImageUrl(d.profilePic || `https://ui-avatars.com/api/?name=${d.fullName}`, 200);
+        if (imageObserver) imageObserver.observe(userPic);
+
+        const coverEl = document.getElementById('coverImg');
+        if(d.coverPic) {
+            coverEl.dataset.low = getLowQualityImageUrl(d.coverPic, 100);
+            coverEl.dataset.normal = getOptimizedImageUrl(d.coverPic, 600);
+            coverEl.classList.remove('hidden');
+            if (imageObserver) imageObserver.observe(coverEl);
+        } else {
+            coverEl.classList.add('hidden');
+        }
+
+        document.getElementById('userBio').innerText = d.bio || "No bio available";
     }
 
-    function renderFeed(posts) {
+    // ==================== FETCH POSTS DATA ====================
+    async function fetchPostsData() {
+        if (isLoading) return;
+        isLoading = true;
+
+        try {
+            const snap = await db.ref('posts').orderByChild('uid').equalTo(targetUid).once('value');
+            const rawPosts = [];
+            const uidsNeeded = new Set();
+
+            snap.forEach(child => {
+                const post = child.val();
+                rawPosts.push({ id: child.key, ...post });
+                if (post.comments) {
+                    Object.values(post.comments).forEach(c => {
+                        if (!userCache[c.uid]) uidsNeeded.add(c.uid);
+                    });
+                }
+            });
+
+            // Fetch missing commenters
+            if (uidsNeeded.size > 0) {
+                await fetchMissingUsers([...uidsNeeded]);
+            }
+
+            // Process posts
+            const processedPosts = rawPosts.map(p => processPost(p)).sort((a, b) => b.timestamp - a.timestamp);
+
+            // Check if data changed
+            const hasChanged = JSON.stringify(processedPosts) !== JSON.stringify(allUserPosts.slice(0, processedPosts.length));
+
+            if (hasChanged || allUserPosts.length === 0) {
+                allUserPosts = processedPosts;
+                saveCache(CACHE.POSTS + targetUid, allUserPosts);
+
+                displayedCount = Math.min(POSTS_PER_PAGE, allUserPosts.length);
+                renderFeed(0, displayedCount, false);
+                updateLoadMoreUI();
+            }
+
+        } catch(e) {
+            console.error('Posts fetch error:', e);
+        }
+
+        isLoading = false;
+    }
+
+    function processPost(post) {
+        const author = userCache[post.uid] || {};
+        const isVAuthor = author.isVerified === true || author.isVerified === "true";
+        return {
+            id: post.id,
+            uid: post.uid,
+            text: post.text || '',
+            timestamp: post.timestamp,
+            imageUrl: post.imageUrl || '',
+            background: post.background || '',
+            isLiked: !!(post.likedBy && post.likedBy[myUid]),
+            likeCount: post.likedBy ? Object.keys(post.likedBy).length : 0,
+            commentCount: post.comments ? Object.keys(post.comments).length : 0,
+            comments: post.comments || null,
+            fullName: author.fullName || 'User',
+            profilePic: author.profilePic || '',
+            isVerified: isVAuthor
+        };
+    }
+
+    // ==================== RENDER FEED ====================
+    function renderFeed(startIndex, count, append = false) {
         const container = document.getElementById('myPostsContainer');
-        container.innerHTML = posts.map(post => {
-            const likes = post.likedBy ? Object.keys(post.likedBy).length : 0;
-            const comments = post.comments ? Object.keys(post.comments).length : 0;
-            const isLiked = post.likedBy && post.likedBy[myUid];
-            const author = userCache[post.uid] || {};
-            const isVAuthor = author.isVerified === true || author.isVerified === "true";
-            const isHidden = openComments[post.id] ? '' : 'hidden';
+        const postsToShow = allUserPosts.slice(startIndex, startIndex + count);
 
-            return `<div class="post-card">
-                <div class="p-3 flex items-center justify-between border-b mx-1">
-                    <div class="flex items-center gap-2">
-                        <img src="${author.profilePic || 'https://ui-avatars.com/api/?name='+author.fullName}" class="w-9 h-9 rounded-full">
-                        <div>
-                            <p class="font-bold text-sm">${author.fullName || 'User'}${isVAuthor ? blueBadge : ""}</p>
-                            <p class="text-[10px] text-gray-400">${timeAgo(post.timestamp)}</p>
-                        </div>
-                    </div>
-                    ${post.uid === myUid ? `<button onclick="deletePost('${post.id}')" class="text-gray-300 p-2"><i class="fas fa-trash-alt"></i></button>` : ''}
-                </div>
-                <div class="${post.background && post.background !== 'none' ? 'colored-content' : 'px-4 py-3 text-sm'}" style="background: ${post.background || 'transparent'}">${post.text}</div>
-                <div class="px-4 py-2 flex justify-between text-gray-500 text-[11px] border-b mx-2">
-                    <span><i class="fas fa-thumbs-up text-blue-500"></i> ${likes}</span>
-                    <span onclick="toggleBox('${post.id}')" class="cursor-pointer hover:underline">${comments} comments</span>
-                </div>
-                <div class="flex p-1">
-                    <button onclick="handleLike('${post.id}')" class="flex-1 py-2 text-sm font-semibold flex items-center justify-center gap-2 ${isLiked ? 'text-blue-600': 'text-gray-500'}"><i class="${isLiked?'fas':'far'} fa-thumbs-up"></i> Like</button>
-                    <button onclick="toggleBox('${post.id}')" class="flex-1 py-2 text-sm font-semibold flex items-center justify-center gap-2 text-gray-500"><i class="far fa-comment"></i> Comment</button>
-                </div>
-                <div id="box-${post.id}" class="${isHidden} border-t bg-gray-50 p-2">
-                    <div class="space-y-3 mb-2 max-h-40 overflow-y-auto">${renderComments(post.comments, post.id)}</div>
-                    <div class="flex gap-2">
-                        <input type="text" id="in-${post.id}" placeholder="Write a comment..." class="flex-1 bg-white border rounded-full px-4 py-1.5 text-xs outline-none">
-                        <button onclick="sendComment('${post.id}')" class="text-blue-600 px-2"><i class="fas fa-paper-plane"></i></button>
-                    </div>
-                </div>
-            </div>`;
-        }).join('');
+        if (postsToShow.length === 0 && !append) {
+            container.innerHTML = `<p class="text-center text-gray-400 py-10 text-sm">No posts to show</p>`;
+            return;
+        }
+
+        const html = postsToShow.map(post => createPostHTML(post)).join('');
+
+        if (append) {
+            container.insertAdjacentHTML('beforeend', html);
+        } else {
+            container.innerHTML = html;
+        }
+
+        observeAllLazyImages();
+        showCacheInfo();
     }
 
-    function renderComments(comments, pid) {
-        if(!comments) return '<p class="text-[10px] text-gray-400 text-center">No comments yet</p>';
-        return Object.values(comments).sort((a,b)=>b.timestamp - a.timestamp).map(c => {
-            const u = userCache[c.uid] || {fullName: "User"};
-            const isV = u.isVerified === true || u.isVerified === "true";
+    // ==================== CREATE POST HTML ====================
+    function createPostHTML(post) {
+        const isLiked = post.isLiked;
+        const badge = post.isVerified ? blueBadge : "";
+        const hasBackground = post.background && post.background !== 'none' && post.background !== '';
+        const isHidden = openComments[post.id] ? '' : 'hidden';
+
+        // Read More
+        const textObj = truncateText(post.text, 150);
+        let textHTML;
+        if (textObj.needsMore) {
+            const encodedFull = encodeURIComponent(textObj.full);
+            textHTML = `<span class="post-text">${textObj.display}</span>
+                       <span class="read-more-btn" data-full="${encodedFull}">See more</span>`;
+        } else {
+            textHTML = `<span class="post-text">${textObj.display}</span>`;
+        }
+
+        // Content
+        let contentHTML = '';
+        if (hasBackground) {
+            contentHTML = `<div class="colored-content" style="background: ${post.background}">${textHTML}</div>`;
+        } else {
+            contentHTML = `<div class="px-4 py-3 text-sm text-gray-800">${textHTML}</div>`;
+        }
+
+        // Image
+        let imageHTML = '';
+        if (post.imageUrl && !hasBackground) {
+            imageHTML = `
+                <div class="px-4 pb-3">
+                    <img data-low="${getLowQualityImageUrl(post.imageUrl)}" 
+                         data-normal="${getOptimizedImageUrl(post.imageUrl, 500)}"
+                         src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='250' viewBox='0 0 400 250'%3E%3Crect width='400' height='250' fill='%23f0f2f5'/%3E%3C/svg%3E"
+                         class="w-full rounded-lg lazy-image"
+                         style="max-height: 350px; object-fit: cover;"
+                         loading="lazy">
+                </div>`;
+        }
+
+        return `<div class="post-card" data-post-id="${post.id}">
+            <div class="p-3 flex items-center justify-between border-b mx-1">
+                <div class="flex items-center gap-2">
+                    <img data-low="${getLowQualityImageUrl(post.profilePic || 'https://ui-avatars.com/api/?name=' + post.fullName, 50)}" 
+                         data-normal="${getOptimizedImageUrl(post.profilePic || 'https://ui-avatars.com/api/?name=' + post.fullName, 100)}"
+                         src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23f0f2f5'/%3E%3C/svg%3E"
+                         class="w-8 h-8 rounded-full bg-gray-100 lazy-image">
+                    <div>
+                        <p class="font-bold text-sm leading-tight">${post.fullName}${badge}</p>
+                        <p class="text-[9px] text-gray-400">${timeAgo(post.timestamp)}</p>
+                    </div>
+                </div>
+                ${post.uid === myUid ? `<button onclick="deletePost('${post.id}')" class="text-gray-300 p-2"><i class="fas fa-trash-alt text-xs"></i></button>` : ''}
+            </div>
+
+            ${contentHTML}
+            ${imageHTML}
+
+            <div class="px-4 py-2 flex justify-between text-gray-500 text-[10px] border-b mx-2">
+                <span id="likeCount-${post.id}"><i class="fas fa-thumbs-up text-blue-500"></i> ${post.likeCount}</span>
+                <span onclick="toggleBox('${post.id}')" class="cursor-pointer">${post.commentCount} comments</span>
+            </div>
+            <div class="flex p-1">
+                <button onclick="handleLike('${post.id}')" id="likeBtn-${post.id}" class="flex-1 py-1.5 text-xs font-bold flex items-center justify-center gap-2 ${isLiked ? 'text-blue-600': 'text-gray-500'}">
+                    <i class="${isLiked?'fas':'far'} fa-thumbs-up"></i> Like
+                </button>
+                <button onclick="toggleBox('${post.id}')" class="flex-1 py-1.5 text-xs font-bold flex items-center justify-center gap-2 text-gray-500">
+                    <i class="far fa-comment"></i> Comment
+                </button>
+            </div>
+            <div id="box-${post.id}" class="${isHidden} border-t bg-gray-50 p-2">
+                <div class="space-y-3 mb-2 max-h-40 overflow-y-auto">${renderComments(post.comments)}</div>
+                <div class="flex gap-2">
+                    <input type="text" id="in-${post.id}" placeholder="Write a comment..." class="flex-1 bg-white border rounded-full px-4 py-1 text-xs outline-none">
+                    <button onclick="sendComment('${post.id}')" class="text-blue-600 px-2 text-sm"><i class="fas fa-paper-plane"></i></button>
+                </div>
+            </div>
+        </div>`;
+    }
+
+    function renderComments(comments) {
+        if (!comments) return '<p class="text-[9px] text-gray-400 text-center">No comments</p>';
+        return Object.values(comments).sort((a, b) => b.timestamp - a.timestamp).slice(0, 20).map(c => {
+            const u = userCache[c.uid] || { fullName: "User" };
+            const picUrl = getLowQualityImageUrl(u.profilePic || 'https://ui-avatars.com/api/?name=' + (u.fullName || 'U'), 40);
             return `<div class="flex gap-2">
-                <img src="${u.profilePic || 'https://ui-avatars.com/api/?name='+u.fullName}" class="w-7 h-7 rounded-full cursor-pointer" onclick="location.href='profile.html?uid=${c.uid}'">
-                <div class="comment-bubble" onclick="location.href='profile.html?uid=${c.uid}'">
-                    <p class="text-[10px] font-bold">${u.fullName || 'User'}${isV ? blueBadge : ""}</p>
-                    <p class="text-[11px] text-gray-800 leading-tight">${c.text}</p>
-                    <p class="text-[8px] text-gray-400 mt-1">${timeAgo(c.timestamp)}</p>
+                <img src="${picUrl}" class="w-6 h-6 rounded-full">
+                <div class="comment-bubble">
+                    <p class="text-[9px] font-bold">${u.fullName || 'User'}</p>
+                    <p class="text-[10px] text-gray-800 leading-tight">${c.text}</p>
                 </div>
             </div>`;
         }).join('');
     }
 
-    async function handleLike(pid) {
-        const ref = db.ref(`posts/${pid}/likedBy/${myUid}`);
-        const snap = await ref.get(); snap.exists() ? ref.remove() : ref.set(true);
+    // ==================== LOAD MORE ====================
+    function handleLoadMore() {
+        if (allUserPosts.length > displayedCount) {
+            const nextCount = Math.min(POSTS_PER_PAGE, allUserPosts.length - displayedCount);
+            renderFeed(displayedCount, nextCount, true);
+            displayedCount += nextCount;
+            updateLoadMoreUI();
+        } else {
+            updateLoadMoreUI();
+        }
     }
 
+    function updateLoadMoreUI() {
+        const loadMoreContainer = document.getElementById('loadMoreContainer');
+        const allCaughtUp = document.getElementById('allCaughtUp');
+
+        if (displayedCount < allUserPosts.length) {
+            loadMoreContainer.classList.remove('hidden');
+            allCaughtUp.classList.add('hidden');
+        } else if (allUserPosts.length > 0) {
+            loadMoreContainer.classList.add('hidden');
+            allCaughtUp.classList.remove('hidden');
+        } else {
+            loadMoreContainer.classList.add('hidden');
+            allCaughtUp.classList.add('hidden');
+        }
+    }
+
+    function showCacheInfo() {
+        const info = document.getElementById('cacheInfo');
+        if (!info) return;
+        const total = allUserPosts.length;
+        const showing = Math.min(displayedCount, total);
+        info.textContent = total > 0 ? `Showing ${showing} of ${total} posts` : '';
+        info.classList.toggle('hidden', total === 0);
+    }
+
+    // ==================== LIKE (OPTIMISTIC) ====================
+    async function handleLike(pid) {
+        const postIndex = allUserPosts.findIndex(p => p.id === pid);
+        if (postIndex === -1) return;
+
+        const post = allUserPosts[postIndex];
+        const wasLiked = post.isLiked;
+
+        // Optimistic update
+        post.isLiked = !wasLiked;
+        post.likeCount = wasLiked ? Math.max(0, post.likeCount - 1) : post.likeCount + 1;
+
+        // Update UI
+        const likeBtn = document.getElementById(`likeBtn-${pid}`);
+        if (likeBtn) {
+            likeBtn.className = `flex-1 py-1.5 text-xs font-bold flex items-center justify-center gap-2 ${post.isLiked ? 'text-blue-600' : 'text-gray-500'}`;
+            likeBtn.innerHTML = `<i class="${post.isLiked ? 'fas' : 'far'} fa-thumbs-up"></i> Like`;
+        }
+        const countEl = document.getElementById(`likeCount-${pid}`);
+        if (countEl) countEl.innerHTML = `<i class="fas fa-thumbs-up text-blue-500"></i> ${post.likeCount}`;
+
+        // Firebase
+        try {
+            const ref = db.ref(`posts/${pid}/likedBy/${myUid}`);
+            if (wasLiked) await ref.remove();
+            else await ref.set(true);
+            saveCache(CACHE.POSTS + targetUid, allUserPosts);
+        } catch(e) {
+            // Revert
+            post.isLiked = wasLiked;
+            post.likeCount = wasLiked ? post.likeCount + 1 : Math.max(0, post.likeCount - 1);
+            if (likeBtn) {
+                likeBtn.className = `flex-1 py-1.5 text-xs font-bold flex items-center justify-center gap-2 ${wasLiked ? 'text-blue-600' : 'text-gray-500'}`;
+                likeBtn.innerHTML = `<i class="${wasLiked ? 'fas' : 'far'} fa-thumbs-up"></i> Like`;
+            }
+            if (countEl) countEl.innerHTML = `<i class="fas fa-thumbs-up text-blue-500"></i> ${post.likeCount}`;
+        }
+    }
+
+    // ==================== COMMENT ====================
     async function sendComment(pid) {
         const inp = document.getElementById(`in-${pid}`);
-        if(!inp.value.trim()) return;
-        await db.ref(`posts/${pid}/comments`).push({ uid: myUid, text: inp.value.trim(), timestamp: Date.now() });
-        inp.value = "";
-    }
+        if (!inp.value.trim()) return;
 
-    async function deletePost(pid) {
-        Swal.fire({ title: 'Delete Post?', text: "You won't be able to revert this!", icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', confirmButtonText: 'Yes, delete it!' }).then(async (result) => {
-            if (result.isConfirmed) { await db.ref(`posts/${pid}`).remove(); }
-        });
+        const text = inp.value.trim();
+        inp.value = "";
+
+        // Optimistic: add to local
+        const postIndex = allUserPosts.findIndex(p => p.id === pid);
+        if (postIndex !== -1) {
+            const post = allUserPosts[postIndex];
+            if (!post.comments) post.comments = {};
+            const tempKey = 'temp_' + Date.now();
+            post.comments[tempKey] = { uid: myUid, text: text, timestamp: Date.now() };
+            post.commentCount = Object.keys(post.comments).length;
+
+            // Re-render comments
+            const box = document.getElementById(`box-${pid}`);
+            if (box) {
+                const commentsDiv = box.querySelector('.space-y-3');
+                if (commentsDiv) commentsDiv.innerHTML = renderComments(post.comments);
+            }
+        }
+
+        // Firebase
+        try {
+            const ref = await db.ref(`posts/${pid}/comments`).push({ uid: myUid, text: text, timestamp: Date.now() });
+            // Replace temp key with real key
+            if (postIndex !== -1) {
+                delete allUserPosts[postIndex].comments[tempKey];
+                allUserPosts[postIndex].comments[ref.key] = { uid: myUid, text: text, timestamp: Date.now() };
+                saveCache(CACHE.POSTS + targetUid, allUserPosts);
+            }
+        } catch(e) {
+            // Revert
+            if (postIndex !== -1) {
+                delete allUserPosts[postIndex].comments[tempKey];
+                allUserPosts[postIndex].commentCount = Object.keys(allUserPosts[postIndex].comments || {}).length;
+            }
+        }
     }
 
     function toggleBox(id) {
         const el = document.getElementById(`box-${id}`);
+        if (!el) return;
         el.classList.toggle('hidden');
         openComments[id] = !el.classList.contains('hidden');
     }
 
+    // ==================== STATUS ====================
     function listenStatus(uid) {
-        db.ref(`status/${uid}`).on('value', snap => {
+        if (statusListener) db.ref(`status/${uid}`).off('value', statusListener);
+        statusListener = db.ref(`status/${uid}`).on('value', snap => {
             const d = snap.val();
             const isOnline = d && (d.state === 'online' || Date.now() < d.last_changed);
             document.getElementById('activeDot').className = `status-indicator ${isOnline ? 'status-online' : ''}`;
@@ -240,23 +648,108 @@
         });
     }
 
+    // ==================== FOLLOW ====================
     function renderButtons(uid) {
         const div = document.getElementById('profileActions');
         if (uid === myUid) {
             div.innerHTML = `<button onclick="location.href='editprofile.html'" class="bg-[#e4e6eb] text-black px-10 py-2 rounded-lg font-bold text-sm">Edit Profile</button>`;
         } else {
-            db.ref(`user-following/${myUid}/${uid}`).on('value', s => {
-                const isF = s.exists();
-                div.innerHTML = `<button onclick="toggleFollow('${uid}', ${isF})" class="px-6 py-2 rounded-lg font-bold text-sm ${isF ? 'bg-gray-200 text-black':'bg-[#1877F2] text-white'}">${isF ? 'Following' : 'Follow'}</button>
-                <button onclick="location.href='chat.html?uid=${uid}'" class="bg-gray-200 text-black px-6 py-2 rounded-lg font-bold text-sm">Message</button>`;
+            const isF = !!myFollowing[uid];
+            applyFollowButton(div, uid, isF);
+
+            // Listen for follow state changes
+            if (followListener) db.ref(`user-following/${myUid}/${uid}`).off('value', followListener);
+            followListener = db.ref(`user-following/${myUid}/${uid}`).on('value', s => {
+                applyFollowButton(div, uid, s.exists());
             });
         }
     }
 
-    async function toggleFollow(t, isF) {
-        if(isF) { await db.ref(`user-following/${myUid}/${t}`).remove(); await db.ref(`user-followers/${t}/${myUid}`).remove(); }
-        else { await db.ref(`user-following/${myUid}/${t}`).set(true); await db.ref(`user-followers/${t}/${myUid}`).set(true); }
+    function applyFollowButton(div, uid, isF) {
+        div.innerHTML = `
+            <button onclick="toggleFollow('${uid}', ${isF})" class="px-6 py-2 rounded-lg font-bold text-sm ${isF ? 'bg-gray-200 text-black':'bg-[#1877F2] text-white'}">${isF ? 'Following' : 'Follow'}</button>
+            <button onclick="location.href='chat.html?uid=${uid}'" class="bg-gray-200 text-black px-6 py-2 rounded-lg font-bold text-sm">Message</button>`;
     }
+
+    async function toggleFollow(t, isF) {
+        // Optimistic
+        if (isF) {
+            delete myFollowing[t];
+        } else {
+            myFollowing[t] = true;
+        }
+        saveCache(CACHE.FOLLOWING + myUid, myFollowing);
+        
+        const div = document.getElementById('profileActions');
+        applyFollowButton(div, t, !isF);
+
+        // Update follower count optimistically
+        const fCountEl = document.getElementById('fCount');
+        const currentCount = parseInt(fCountEl.innerText) || 0;
+        fCountEl.innerText = formatFollowers(isF ? Math.max(0, currentCount - 1) : currentCount + 1);
+
+        // Firebase
+        try {
+            if (isF) {
+                await db.ref(`user-following/${myUid}/${t}`).remove();
+                await db.ref(`user-followers/${t}/${myUid}`).remove();
+            } else {
+                await db.ref(`user-following/${myUid}/${t}`).set(true);
+                await db.ref(`user-followers/${t}/${myUid}`).set(true);
+            }
+        } catch(e) {
+            // Revert
+            if (isF) myFollowing[t] = true;
+            else delete myFollowing[t];
+            saveCache(CACHE.FOLLOWING + myUid, myFollowing);
+            applyFollowButton(div, t, isF);
+            fCountEl.innerText = formatFollowers(isF ? currentCount + 1 : Math.max(0, currentCount - 1));
+        }
+    }
+
+    // ==================== DELETE POST ====================
+    async function deletePost(pid) {
+        Swal.fire({ title: 'Delete this post?', icon: 'warning', showCancelButton: true, confirmButtonText: 'Yes, delete', confirmButtonColor: '#d33' }).then(async (r) => {
+            if (r.isConfirmed) {
+                // Optimistic remove
+                allUserPosts = allUserPosts.filter(p => p.id !== pid);
+                saveCache(CACHE.POSTS + targetUid, allUserPosts);
+                
+                const card = document.querySelector(`.post-card[data-post-id="${pid}"]`);
+                if (card) {
+                    card.style.transition = 'opacity 0.3s, transform 0.3s';
+                    card.style.opacity = '0';
+                    card.style.transform = 'scale(0.9)';
+                    setTimeout(() => card.remove(), 300);
+                }
+
+                try {
+                    await db.ref(`posts/${pid}`).remove();
+                } catch(e) {
+                    // Revert - re-fetch
+                    fetchPostsData();
+                }
+            }
+        });
+    }
+
+    // ==================== READ MORE (Event Delegation) ====================
+    document.addEventListener('click', function(e) {
+        if (e.target.classList.contains('read-more-btn')) {
+            const fullText = decodeURIComponent(e.target.dataset.full || '');
+            if (fullText) {
+                const parent = e.target.parentElement;
+                const textSpan = parent.querySelector('.post-text');
+                if (textSpan) textSpan.textContent = fullText;
+                e.target.remove();
+            }
+        }
+    });
+
+    // ==================== CLEANUP ON LEAVE ====================
+    window.addEventListener('beforeunload', () => {
+        db.ref(`status/${myUid}`).set({ state: 'offline', last_changed: Date.now() });
+    });
 </script>
 </body>
 </html>
