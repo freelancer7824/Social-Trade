@@ -25,9 +25,10 @@
         .action-btn:hover { background: #f0f2f5; border-radius: 4px; }
         .active-like { color: #1877F2 !important; }
         
-        .status-dot { width: 12px; height: 12px; border: 2px solid white; border-radius: 50%; position: absolute; bottom: 2px; right: 2px; }
-        .online { background-color: #31a24c; }
-        .offline { background-color: #b0b3b8; }
+        /* Status Dot Styles */
+        .status-dot { width: 12px; height: 12px; border: 2px solid white; border-radius: 50%; position: absolute; bottom: 0; right: 0; }
+        .status-online { background-color: #31a24c; box-shadow: 0 0 0 2px white; }
+        .status-offline { background-color: #b0b3b8; box-shadow: 0 0 0 2px white; }
         
         .follow-btn { font-size: 12px; font-weight: 700; padding: 4px 12px; border-radius: 4px; margin-left: 8px; cursor: pointer; background: #e7f3ff; color: #1877F2; border: none; }
         .follow-btn.following { background: #e4e6eb; color: #65676b; }
@@ -180,7 +181,11 @@
     let oldestTimestamp = Infinity;
     let pollingTimer = null;
     let newPostsCount = 0;
-    let activeStatusListeners = {};
+    
+    // Status tracking maps
+    let activeStatusListeners = {}; // Tracks which UIDs have active Firebase listeners
+    let currentUserStatuses = {};  // Stores current online/offline state locally
+    
     let imageObserver = null;
 
     // ==================== CACHE UTILITIES ====================
@@ -188,7 +193,6 @@
         try {
             localStorage.setItem(key, JSON.stringify(data));
         } catch (e) {
-            // Storage ভরে গেলে পুরানো ডাটা মুছে দাও
             cleanCache();
         }
     }
@@ -203,7 +207,6 @@
     }
 
     function cleanCache() {
-        // শুধু আমাদের ক্যাশ keys মুছবে
         const keysToRemove = [];
         for (let i = 0; i < localStorage.length; i++) {
             const key = localStorage.key(i);
@@ -276,7 +279,6 @@
         };
     }
 
-    // Enrich raw Firebase post with user data
     function enrichPost(rawPost, id) {
         const user = userCache[rawPost.uid] || { fullName: "User", profilePic: '', isVerified: false };
         return {
@@ -305,10 +307,8 @@
                     const lowSrc = img.dataset.low;
                     const normalSrc = img.dataset.normal;
                     if (lowSrc && normalSrc) {
-                        // প্রথমে low quality দেখাও
                         img.src = lowSrc;
                         img.classList.add('loaded');
-                        // তারপর normal quality লোড করো
                         const fullImg = new Image();
                         fullImg.src = normalSrc;
                         fullImg.onload = () => { img.src = normalSrc; };
@@ -340,30 +340,23 @@
 
     // ==================== INITIALIZATION ====================
     async function init() {
-        // Step 1: LocalStorage থেকে ক্যাশ লোড করো
         loadFromCache();
 
         if (allPosts.length > 0) {
-            // ক্যাশে ডাটা আছে - তৎক্ষণাৎ দেখাও, Firebase থেকে আবার লোড করবে না
             displayedCount = Math.min(POSTS_PER_PAGE, allPosts.length);
             renderPosts(0, displayedCount, false);
             updateLoadMoreUI();
             showCacheInfo();
-
-            // Background এ নতুন পোস্ট চেক করো
             setTimeout(() => checkForNewPosts(), 2000);
         } else {
-            // প্রথমবার - Firebase থেকে লোড করতে হবে
             showSkeletonLoader(5);
             await fetchInitialPosts();
         }
 
-        // ফলোয়িং লিস্ট লোড (ক্যাশে না থাকলে)
         if (Object.keys(myFollowing).length === 0) {
             fetchFollowing();
         }
 
-        // পোলিং শুরু
         startPolling();
     }
 
@@ -419,7 +412,6 @@
         isLoading = true;
 
         try {
-            // Firebase থেকে সর্বশেষ 50 পোস্ট নাও
             const snap = await db.ref('posts').orderByChild('timestamp').limitToLast(POSTS_PER_PAGE).once('value');
             const rawPosts = [];
             const uidsNeeded = new Set();
@@ -430,12 +422,10 @@
                 if (!userCache[post.uid]) uidsNeeded.add(post.uid);
             });
 
-            // শুধু মিসিং ইউজারদের ডাটা ফেচ করো
             if (uidsNeeded.size > 0) {
                 await fetchMissingUsers([...uidsNeeded]);
             }
 
-            // পোস্ট enrich করো
             const posts = rawPosts.map(p => enrichPost(p, p.id)).sort((a, b) => b.timestamp - a.timestamp);
 
             allPosts = posts;
@@ -447,10 +437,7 @@
             hasMorePosts = rawPosts.length >= POSTS_PER_PAGE;
             displayedCount = allPosts.length;
 
-            // ক্যাশে সেভ করো
             saveAllCache();
-
-            // UI আপডেট
             renderPosts(0, displayedCount, false);
             updateLoadMoreUI();
             showCacheInfo();
@@ -497,7 +484,6 @@
         if (isLoading || !hasMorePosts) return;
         isLoading = true;
 
-        // Loading state
         const spinner = document.getElementById('loadMoreSpinner');
         const loadText = document.getElementById('loadMoreText');
         const loadBtn = document.getElementById('loadMoreBtn');
@@ -506,7 +492,6 @@
         if (loadBtn) loadBtn.disabled = true;
 
         try {
-            // সবচেয়ে পুরানো timestamp এর আগের পোস্ট নাও
             const query = oldestTimestamp < Infinity
                 ? db.ref('posts').orderByChild('timestamp').endAt(oldestTimestamp - 1).limitToLast(POSTS_PER_PAGE)
                 : db.ref('posts').orderByChild('timestamp').limitToLast(POSTS_PER_PAGE);
@@ -517,19 +502,16 @@
 
             snap.forEach(child => {
                 const post = child.val();
-                // ডুপ্লিকেট চেক
                 if (!allPosts.some(p => p.id === child.key)) {
                     rawPosts.push({ id: child.key, ...post });
                     if (!userCache[post.uid]) uidsNeeded.add(post.uid);
                 }
             });
 
-            // মিসিং ইউজার ফেচ
             if (uidsNeeded.size > 0) {
                 await fetchMissingUsers([...uidsNeeded]);
             }
 
-            // Enrich করো
             const newPosts = rawPosts.map(p => enrichPost(p, p.id)).sort((a, b) => b.timestamp - a.timestamp);
 
             if (newPosts.length > 0) {
@@ -538,11 +520,8 @@
             }
 
             hasMorePosts = rawPosts.length >= POSTS_PER_PAGE;
-
-            // ক্যাশে সেভ
             saveAllCache();
 
-            // নতুন পোস্ট append করো
             const startIndex = displayedCount;
             const newCount = Math.min(POSTS_PER_PAGE, allPosts.length - displayedCount);
             displayedCount += newCount;
@@ -554,7 +533,6 @@
             console.error('Fetch older posts error:', e);
         }
 
-        // Reset loading state
         if (spinner) spinner.classList.add('hidden');
         if (loadText) loadText.textContent = 'Show More Posts';
         if (loadBtn) loadBtn.disabled = false;
@@ -566,7 +544,6 @@
         if (newestTimestamp === 0) return;
 
         try {
-            // newestTimestamp এর পরের নতুন পোস্ট চেক
             const snap = await db.ref('posts').orderByChild('timestamp').startAt(newestTimestamp).limitToLast(20).once('value');
             let count = 0;
             snap.forEach(child => {
@@ -606,20 +583,13 @@
             const newPosts = rawPosts.map(p => enrichPost(p, p.id)).sort((a, b) => b.timestamp - a.timestamp);
 
             if (newPosts.length > 0) {
-                // নতুন পোস্ট সামনে যোগ করো
                 allPosts = [...newPosts, ...allPosts];
                 newestTimestamp = allPosts[0].timestamp;
-
-                // ক্যাশে সেভ
                 saveAllCache();
-
-                // পুরো ফিড রিফ্রেশ (নতুন পোস্ট উপরে দেখাতে হবে)
                 displayedCount = Math.min(POSTS_PER_PAGE, allPosts.length);
                 renderPosts(0, displayedCount, false);
                 updateLoadMoreUI();
                 showCacheInfo();
-
-                // উপরে স্ক্রল
                 window.scrollTo({ top: 0, behavior: 'smooth' });
             }
 
@@ -637,7 +607,6 @@
 
     // ==================== SAVE ALL CACHE ====================
     function saveAllCache() {
-        // পোস্ট ক্যাশ - likedBy এর পুরো অবজেক্ট না রেখে শুধু like count আর isLiked রাখো
         saveCache(CACHE.POSTS, allPosts);
         saveCache(CACHE.META, {
             hasMore: hasMorePosts,
@@ -678,11 +647,8 @@
             container.innerHTML = html;
         }
 
-        // Lazy images observe করো
         observeAllLazyImages();
-
-        // Visible posts এর status observe করো
-        observeVisibleStatuses();
+        observeVisibleStatuses(); // পোস্ট রেন্ডার হলে স্ট্যাটাস চেক শুরু করবে
     }
 
     // ==================== CREATE POST HTML ====================
@@ -691,7 +657,6 @@
         const badge = post.isVerified ? blueBadge : "";
         const hasBackground = post.background && post.background !== "none" && post.background !== "";
 
-        // Read More
         const textObj = truncateText(post.text, 150);
         let textHTML;
         if (textObj.needsMore) {
@@ -702,7 +667,6 @@
             textHTML = `<span class="post-text">${textObj.display}</span>`;
         }
 
-        // Follow Button
         let followBtn = '';
         if (post.uid !== myUid) {
             const isFollowing = myFollowing[post.uid];
@@ -711,7 +675,6 @@
                         ${isFollowing ? 'Following' : 'Follow'}</button>`;
         }
 
-        // Banner/Background Post
         let contentHTML = '';
         if (hasBackground) {
             contentHTML = `<div class="colored-content" style="background: ${post.background};">${textHTML}</div>`;
@@ -719,7 +682,6 @@
             contentHTML = `<div class="px-4 pb-2 text-[15px]">${textHTML}</div>`;
         }
 
-        // Image
         let imageHTML = '';
         if (post.imageUrl && !hasBackground) {
             imageHTML = `
@@ -737,6 +699,7 @@
         const likeCount = post.likeCount || 0;
         const commentCount = post.commentCount || 0;
 
+        // 🟢 এখানে ID ঠিকমতো দেওয়া হয়েছে যেন JS দিয়ে ধরা যায়
         return `
         <div class="post-card" data-post-id="${post.id}">
             <div class="p-4 flex items-center gap-3">
@@ -746,7 +709,7 @@
                          src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' fill='%23f0f2f5'/%3E%3C/svg%3E"
                          class="w-10 h-10 rounded-full lazy-image"
                          alt="${post.fullName}">
-                    <span class="status-dot offline" data-uid="${post.uid}"></span>
+                    <span id="status-dot-${post.uid}" class="status-dot status-offline"></span>
                 </div>
                 <div class="flex-1">
                     <div class="flex items-center">
@@ -786,7 +749,6 @@
     // ==================== LOAD MORE ====================
     function handleLoadMore() {
         if (allPosts.length > displayedCount) {
-            // ক্যাশে আরও পোস্ট আছে - Firebase থেকে লোড করার দরকার নেই
             const nextCount = Math.min(POSTS_PER_PAGE, allPosts.length - displayedCount);
             const startIndex = displayedCount;
             displayedCount += nextCount;
@@ -794,10 +756,8 @@
             updateLoadMoreUI();
             showCacheInfo();
         } else if (hasMorePosts) {
-            // Firebase থেকে আরও পোস্ট লোড করো
             fetchOlderPosts();
         } else {
-            // আর পোস্ট নেই
             updateLoadMoreUI();
         }
     }
@@ -808,17 +768,14 @@
         const loadBtn = document.getElementById('loadMoreBtn');
 
         if (displayedCount < allPosts.length) {
-            // ক্যাশে আরও আছে
             loadMoreContainer.classList.remove('hidden');
             allCaughtUp.classList.add('hidden');
             if (loadBtn) loadBtn.style.display = 'block';
         } else if (hasMorePosts) {
-            // Firebase এ আরও থাকতে পারে
             loadMoreContainer.classList.remove('hidden');
             allCaughtUp.classList.add('hidden');
             if (loadBtn) loadBtn.style.display = 'block';
         } else {
-            // সব শেষ
             loadMoreContainer.classList.add('hidden');
             allCaughtUp.classList.remove('hidden');
         }
@@ -850,6 +807,7 @@
             if (filtered.length > 0) {
                 container.innerHTML = filtered.map(post => createPostHTML(post)).join('');
                 observeAllLazyImages();
+                observeVisibleStatuses();
             } else {
                 container.innerHTML = '<div class="text-center py-10 text-gray-500">No results found</div>';
             }
@@ -863,26 +821,56 @@
         }
     }
 
-    // ==================== STATUS OBSERVATION ====================
+    // ==================== 🟢 STATUS OBSERVATION (FIXED & UPGRADED) ====================
     function observeVisibleStatuses() {
-        // শুধু দৃশ্যমান পোস্টের status observe করো
         document.querySelectorAll('.post-card[data-post-id]').forEach(card => {
             const postId = card.dataset.postId;
             const post = allPosts.find(p => p.id === postId);
+            
+            // যদি এই ইউজারের জন্য আগে থেকে কোনো লিসেনার না থাকে, তবে নতুন সেট করো
             if (post && !activeStatusListeners[post.uid]) {
-                activeStatusListeners[post.uid] = true;
-                observeStatus(post.uid, `status-${postId}`);
+                activeStatusListeners[post.uid] = true; // ডুপ্লিকেট লিসেনার বন্ধ করার জন্য ফ্ল্যাগ
+                listenToUserStatus(post.uid); // Firebase রিয়েল-টাইম লিসেনার শুরু
+            } else if (post && currentUserStatuses[post.uid]) {
+                // যদি ডাটাবেস থেকে আগেই স্ট্যাটাস জানা থাকে, কিন্তু UI আপডেট না হয়ে থাকে
+                updateStatusDotUI(post.uid, currentUserStatuses[post.uid]);
             }
         });
     }
 
-    function observeStatus(uid, dotId) {
+    function listenToUserStatus(uid) {
         db.ref(`status/${uid}`).on('value', snap => {
-            const dot = document.getElementById(dotId);
-            if (!dot) return;
             const data = snap.val();
-            const isOnline = data && (data.state === 'online' || (data.last && Date.now() - data.last < 60000));
-            dot.className = `status-dot ${isOnline ? 'online' : 'offline'}`;
+            let isOnline = false;
+
+            if (data) {
+                if (data.state === 'online') {
+                    isOnline = true;
+                } else if (data.lastActive && (Date.now() - data.lastActive < 90000)) {
+                    // যদি স্টেট অফলাইন থাকে, কিন্তু সর্বশেষ ১.৫ মিনিটে অ্যাক্টিভ থাকে
+                    isOnline = true;
+                } else if (data.last && (Date.now() - data.last < 60000)) {
+                    // পুরানো ভার্সনের জন্য চেক
+                    isOnline = true;
+                }
+            }
+
+            currentUserStatuses[uid] = isOnline; // লোকাল স্টেট সেভ করো
+            updateStatusDotUI(uid, isOnline); // UI আপডেট করো
+        });
+    }
+
+    function updateStatusDotUI(uid, isOnline) {
+        // ডোম থেকে সেই ইউজারের সব ডট বের করে আনো (একই ইউজারের একাধিক পোস্ট থাকতে পারে)
+        const dots = document.querySelectorAll(`#status-dot-${uid}`);
+        dots.forEach(dot => {
+            if (dot) {
+                if (isOnline) {
+                    dot.className = 'status-dot status-online';
+                } else {
+                    dot.className = 'status-dot status-offline';
+                }
+            }
         });
     }
 
@@ -899,18 +887,15 @@
         const post = allPosts[postIndex];
         const wasLiked = post.isLiked;
 
-        // Optimistic UI update - তৎক্ষণাৎ UI আপডেট
         post.isLiked = !wasLiked;
         post.likeCount = wasLiked ? Math.max(0, post.likeCount - 1) : post.likeCount + 1;
 
-        // UI আপডেট
         const likeBtn = document.getElementById(`likeBtn-${postId}`);
         if (likeBtn) {
             likeBtn.className = `action-btn ${post.isLiked ? 'active-like' : ''}`;
             likeBtn.innerHTML = `<i class="${post.isLiked ? 'fas' : 'far'} fa-thumbs-up"></i> Like`;
         }
 
-        // Like count আপডেট
         const card = document.querySelector(`.post-card[data-post-id="${postId}"]`);
         if (card) {
             const countSpan = card.querySelector('.fa-thumbs-up')?.parentElement;
@@ -919,7 +904,6 @@
             }
         }
 
-        // Firebase এ আপডেট
         try {
             const likeRef = db.ref(`posts/${postId}/likedBy/${myUid}`);
             if (wasLiked) {
@@ -927,10 +911,8 @@
             } else {
                 await likeRef.set(true);
             }
-            // ক্যাশে সেভ
             saveCache(CACHE.POSTS, allPosts);
         } catch (e) {
-            // ব্যর্থ হলে revert
             post.isLiked = wasLiked;
             post.likeCount = wasLiked ? post.likeCount + 1 : Math.max(0, post.likeCount - 1);
             if (likeBtn) {
@@ -945,21 +927,18 @@
         event.stopPropagation();
         const wasFollowing = !!myFollowing[targetUid];
 
-        // Optimistic UI
         if (wasFollowing) {
             delete myFollowing[targetUid];
         } else {
             myFollowing[targetUid] = true;
         }
 
-        // UI আপডেট
         const buttons = document.querySelectorAll(`.follow-btn[onclick*="'${targetUid}'"]`);
         buttons.forEach(btn => {
             btn.innerText = wasFollowing ? 'Follow' : 'Following';
             btn.className = `follow-btn ${wasFollowing ? '' : 'following'}`;
         });
 
-        // Firebase
         try {
             const followRef = db.ref(`user-following/${myUid}/${targetUid}`);
             if (wasFollowing) {
@@ -969,7 +948,6 @@
             }
             saveCache(CACHE.FOLLOWING + myUid, myFollowing);
         } catch (e) {
-            // Revert
             if (wasFollowing) {
                 myFollowing[targetUid] = true;
             } else {
@@ -989,7 +967,6 @@
         document.body.style.overflow = "hidden";
         history.pushState({ popup: true }, "");
 
-        // Comments সবসময় Firebase থেকে লোড (ক্যাশে রাখার দরকার নেই, রিয়েলটাইম দরকার)
         db.ref(`posts/${postId}/comments`).once('value', snap => {
             const comments = [];
             const uidsNeeded = new Set();
@@ -999,7 +976,6 @@
                 if (!userCache[comment.uid]) uidsNeeded.add(comment.uid);
             });
 
-            // মিসিং ইউজার ফেচ
             if (uidsNeeded.size > 0) {
                 fetchMissingUsers([...uidsNeeded]).then(() => renderComments(comments));
             } else {
@@ -1047,7 +1023,6 @@
             text: text,
             timestamp: Date.now()
         }).then(() => {
-            // লোকাল commentCount আপডেট
             const postIndex = allPosts.findIndex(p => p.id === currentPostId);
             if (postIndex !== -1) {
                 allPosts[postIndex].commentCount = (allPosts[postIndex].commentCount || 0) + 1;
@@ -1105,11 +1080,9 @@
     // ==================== VISIBILITY CHANGE ====================
     document.addEventListener('visibilitychange', function() {
         if (document.visibilityState === 'visible') {
-            // পেজ আবার visible হলে নতুন পোস্ট চেক করো
             checkForNewPosts();
             startPolling();
         } else {
-            // পেজ hidden হলে পোলিং বন্ধ রাখো (ডাটা বাঁচাও)
             if (pollingTimer) clearInterval(pollingTimer);
         }
     });
