@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>SocialTrade - Pro Feed</title>
+    <title>Posts</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     
@@ -12,254 +12,1107 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
 
     <style>
-        body { background-color: #f0f2f5; font-family: 'Segoe UI', Arial, sans-serif; overflow-anchor: none; -webkit-tap-highlight-color: transparent; user-select: none; }
+        body { background-color: #f0f2f5; font-family: 'Segoe UI', Arial, sans-serif; }
         .post-card { background: white; border-radius: 8px; margin-bottom: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
-        .colored-content { min-height: 280px; display: flex; align-items: center; justify-content: center; padding: 30px; text-align: center; font-size: 1.6rem; font-weight: 800; color: white; border-radius: 4px; }
-        .action-btn { flex: 1; padding: 10px 0; font-size: 13px; font-weight: 600; color: #65676b; display: flex; align-items: center; justify-content: center; gap: 6px; transition: 0.2s; }
+        
+        .colored-content { 
+            min-height: 200px; display: flex; align-items: center; justify-content: center;
+            padding: 20px; text-align: center; font-size: 1.5rem; font-weight: bold;
+            color: white; border-radius: 0; margin: 0 -1px;
+        }
+        
+        .action-btn { flex: 1; padding: 10px 0; font-size: 14px; font-weight: 600; color: #65676b; display: flex; align-items: center; justify-content: center; gap: 6px; transition: 0.2s; cursor: pointer; }
+        .action-btn:hover { background: #f0f2f5; border-radius: 4px; }
         .active-like { color: #1877F2 !important; }
+        
         .status-dot { width: 12px; height: 12px; border: 2px solid white; border-radius: 50%; position: absolute; bottom: 2px; right: 2px; }
         .online { background-color: #31a24c; }
-        .offline { background-color: #90949c; }
-        .follow-btn { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px; margin-left: 6px; cursor: pointer; }
-        .verified-badge { width: 15px; height: 15px; margin-left: 4px; display: inline-block; vertical-align: middle; }
+        .offline { background-color: #b0b3b8; }
         
-        #commentDrawer { position: fixed; bottom: 0; left: 0; right: 0; height: 85%; background: white; z-index: 5000; border-radius: 20px 20px 0 0; transform: translateY(100%); transition: transform 0.4s cubic-bezier(0.1, 0.7, 0.1, 1); display: flex; flex-direction: column; box-shadow: 0 -5px 25px rgba(0,0,0,0.2); }
+        .follow-btn { font-size: 12px; font-weight: 700; padding: 4px 12px; border-radius: 4px; margin-left: 8px; cursor: pointer; background: #e7f3ff; color: #1877F2; border: none; }
+        .follow-btn.following { background: #e4e6eb; color: #65676b; }
+        
+        .verified-badge { width: 16px; height: 16px; margin-left: 4px; display: inline-block; vertical-align: middle; }
+        
+        #commentDrawer { position: fixed; bottom: 0; left: 0; right: 0; height: 85%; background: white; z-index: 5000; border-radius: 20px 20px 0 0; transform: translateY(100%); transition: transform 0.3s; display: flex; flex-direction: column; }
         #commentDrawer.open { transform: translateY(0); }
-        .comment-bubble { background: #f0f2f5; border-radius: 18px; padding: 8px 14px; max-width: 85%; }
         
-        #smartOverlay { display: none; position: fixed; inset: 0; z-index: 10000; background: white; transform: translateY(100%); transition: transform 0.4s ease; }
+        #smartOverlay { display: none; position: fixed; inset: 0; z-index: 10000; background: white; transform: translateY(100%); transition: transform 0.3s; }
         #smartOverlay.show { display: block; transform: translateY(0); }
-        #smartIframe { width: 100%; height: calc(100% - 50px); border: none; }
+        #smartIframe { width: 100%; height: calc(100% - 56px); border: none; }
+        
+        .skeleton { background: linear-gradient(90deg, #f0f2f5 25%, #e0e2e5 50%, #f0f2f5 75%); background-size: 200% 100%; animation: loading 1.5s infinite; }
+        @keyframes loading { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+        
+        .lazy-image { opacity: 0; transition: opacity 0.3s; background: #f0f2f5; }
+        .lazy-image.loaded { opacity: 1; }
+        
+        .post-text { word-wrap: break-word; line-height: 1.5; }
+        .read-more-btn { color: #1877F2; font-weight: 600; font-size: 14px; cursor: pointer; margin-left: 5px; }
+        .read-more-btn:hover { text-decoration: underline; }
+        
+        .new-post-badge { position: fixed; top: 70px; left: 50%; transform: translateX(-50%); background: #1877F2; color: white; padding: 10px 20px; border-radius: 30px; font-weight: 600; z-index: 100; cursor: pointer; box-shadow: 0 4px 12px rgba(24,119,242,0.4); animation: slideDown 0.3s; white-space: nowrap; }
+        @keyframes slideDown { from { top: 0; opacity:0; } to { top: 70px; opacity:1; } }
+        
+        .load-more-btn { display: block; width: 100%; padding: 14px; background: white; border: none; border-radius: 8px; color: #1877F2; font-weight: 600; font-size: 15px; cursor: pointer; box-shadow: 0 1px 2px rgba(0,0,0,0.1); transition: background 0.2s; }
+        .load-more-btn:hover { background: #f0f2f5; }
+        .load-more-btn:disabled { color: #65676b; cursor: not-allowed; }
+        
+        .all-caught-up { text-align: center; padding: 24px 0; color: #65676b; font-size: 14px; }
+        .all-caught-up i { color: #31a24c; }
+        
+        .cache-info { font-size: 11px; color: #b0b3b8; text-align: center; padding: 8px 0; }
+
+        .hidden { display: none !important; }
     </style>
 </head>
 <body class="pb-10">
 
+    <!-- Smart Overlay -->
     <div id="smartOverlay">
-        <div style="display:none" class="h-[50px] border-b flex items-center px-4 bg-white sticky top-0">
-            <button onclick="window.history.back()" class="text-[#1877F2] font-bold"><i class="fas fa-arrow-left"></i> Back</button>
-            <span id="overlayTitle" class="ml-4 font-bold text-gray-700 truncate">SocialTrade</span>
+        <div class="h-14 border-b flex items-center px-4 bg-white sticky top-0 shadow-sm">
+            <button onclick="closeSmartPopup()" class="text-[#1877F2] font-bold text-lg">
+                <i class="fas fa-arrow-left mr-2"></i> Back
+            </button>
+            <span id="overlayTitle" class="ml-4 font-bold text-gray-700 truncate">Posts</span>
         </div>
         <iframe id="smartIframe" src=""></iframe>
     </div>
 
+    <!-- Comments Drawer -->
     <div id="commentDrawer">
-        <div class="h-1.5 w-12 bg-gray-300 rounded-full mx-auto mt-3 mb-2 cursor-pointer" onclick="window.history.back()"></div>
-        <div class="flex justify-between items-center px-4 py-2 border-b">
+        <div class="h-1.5 w-12 bg-gray-300 rounded-full mx-auto mt-3 mb-2" onclick="closeComments()"></div>
+        <div class="flex justify-between items-center px-4 py-3 border-b">
             <h3 class="font-bold text-lg">Comments</h3>
-            <button onclick="window.history.back()" class="text-gray-500 text-xl"><i class="fas fa-times"></i></button>
+            <button onclick="closeComments()" class="text-gray-500 text-xl"><i class="fas fa-times"></i></button>
         </div>
         <div id="commentList" class="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50"></div>
         <div class="p-3 border-t bg-white flex items-center gap-2">
             <input type="text" id="commentInput" placeholder="Write a comment..." class="flex-1 bg-gray-100 rounded-full px-4 py-2 text-sm outline-none border focus:border-blue-400">
-            <button onclick="submitComment()" class="text-[#1877F2] font-bold px-2"><i class="fas fa-paper-plane text-xl"></i></button>
+            <button onclick="submitComment()" class="text-[#1877F2] font-bold px-2">
+                <i class="fas fa-paper-plane text-xl"></i>
+            </button>
         </div>
     </div>
 
-    <div id="pushNotification" class="hidden"></div>
-
-    <div class="bg-white shadow-sm sticky top-0 z-50">
-        <div class="max-w-[500px] mx-auto p-3 flex items-center gap-3">
-            <h1 class="text-2xl font-bold text-[#1877F2] cursor-pointer" onclick="location.reload()"><i class="fas fa-home"></i></h1>
-            <div class="relative flex-1">
-                <input type="text" id="searchInput" oninput="renderFeed()" placeholder="Search..." class="w-full bg-gray-100 rounded-full py-2 px-10 text-[14px] outline-none border border-transparent focus:bg-white focus:border-blue-300">
-                <i class="fas fa-search absolute left-4 top-3 text-gray-400 text-sm"></i>
-            </div>
-            <div class="flex gap-4 items-center">
-                <a href="javascript:void(0)" onclick="openSmartPopup('sms-list.html', 'Messenger')"><i class="fab fa-facebook-messenger text-xl text-[#0084FF]"></i></a>
-                <a href="javascript:void(0)" onclick="openSmartPopup('profile.html?uid=' + myUid, 'My Profile')"><i class="fas fa-user-circle text-2xl text-gray-500"></i></a>
+    <!-- Header -->
+    <div class="bg-white shadow-sm sticky top-0 z-40">
+        <div class="max-w-[600px] mx-auto px-4 py-2 flex items-center justify-between">
+            <h1 class="text-3xl font-bold text-[#1877F2] cursor-pointer" onclick="location.reload()">Posts</h1>
+            <div class="flex items-center gap-4">
+                <div class="relative hidden sm:block">
+                    <i class="fas fa-search absolute left-3 top-3 text-gray-400 text-sm"></i>
+                    <input type="text" id="searchInput" oninput="debouncedSearch()" 
+                           placeholder="Search" class="bg-gray-100 rounded-full py-2 pl-10 pr-4 text-[14px] outline-none w-64">
+                </div>
+                <div class="flex gap-4 items-center">
+                    <a href="javascript:void(0)" onclick="openSmartPopup('sms-list.html', 'Messenger')" class="text-[#1877F2] text-xl"><i class="fab fa-facebook-messenger"></i></a>
+                    <a href="javascript:void(0)" onclick="openSmartPopup('profile.html?uid=' + myUid, 'My Profile')"><i class="fas fa-user-circle text-2xl text-gray-500"></i></a>
+                </div>
             </div>
         </div>
     </div>
 
-    <div class="max-w-[500px] mx-auto p-2" id="postsContainer">
-        <div class="text-center py-20 text-gray-400"><i class="fas fa-spinner fa-spin text-3xl"></i></div>
+    <!-- Main Feed -->
+    <div class="max-w-[600px] mx-auto p-4">
+        <div id="postsContainer"></div>
+        
+        <!-- Load More Button -->
+        <div id="loadMoreContainer" class="hidden mt-3">
+            <button id="loadMoreBtn" onclick="handleLoadMore()" class="load-more-btn">
+                <i class="fas fa-spinner fa-spin hidden" id="loadMoreSpinner"></i>
+                <span id="loadMoreText">Show More Posts</span>
+            </button>
+        </div>
+        
+        <!-- All Caught Up -->
+        <div id="allCaughtUp" class="hidden all-caught-up">
+            <i class="fas fa-check-circle mr-1"></i> You're all caught up
+        </div>
+        
+        <!-- Cache Info -->
+        <div id="cacheInfo" class="cache-info hidden"></div>
+    </div>
+    
+    <!-- New Post Notification -->
+    <div id="newPostNotification" class="hidden new-post-badge" onclick="refreshWithNewPosts()">
+        <i class="fas fa-arrow-up mr-1"></i><span id="newPostCount"></span>
     </div>
 
 <script>
-    const firebaseConfig = { apiKey: "AIzaSyD1mn9MR9hyZ36Ce1lnGyJYmL6AHopScTA", authDomain: "social-media-5e6c8.firebaseapp.com", databaseURL: "https://social-media-5e6c8-default-rtdb.firebaseio.com/", projectId: "social-media-5e6c8" };
+    // ==================== FIREBASE CONFIG ====================
+    const firebaseConfig = { 
+        apiKey: "AIzaSyD1mn9MR9hyZ36Ce1lnGyJYmL6AHopScTA", 
+        authDomain: "social-media-5e6c8.firebaseapp.com", 
+        databaseURL: "https://social-media-5e6c8-default-rtdb.firebaseio.com/", 
+        projectId: "social-media-5e6c8" 
+    };
+    
     firebase.initializeApp(firebaseConfig);
-    const db = firebase.database(), auth = firebase.auth();
-    const blueBadge = `<svg class="verified-badge" viewBox="0 0 24 24" fill="#1877F2" xmlns="http://www.w3.org/2000/svg"><path d="M23.389 10.519L20.897 7.741L21.242 4.025L17.591 3.201L15.681 0L12 1.583L8.319 0L6.409 3.201L2.758 4.015L3.103 7.741L0.611 10.519L2.758 13.297L2.413 17.023L6.064 17.847L7.974 21.048L11.655 19.465L15.336 21.048L17.246 17.847L20.897 17.023L20.552 13.297L22.699 10.519H23.389ZM10.526 15.111L6.776 11.361L8.243 9.894L10.526 12.177L15.757 6.946L17.224 8.413L10.526 15.111Z"/></svg>`;
+    const db = firebase.database();
+    const auth = firebase.auth();
+    
+    const blueBadge = `<svg class="verified-badge" viewBox="0 0 24 24" fill="#1877F2"><path d="M23.389 10.519L20.897 7.741L21.242 4.025L17.591 3.201L15.681 0L12 1.583L8.319 0L6.409 3.201L2.758 4.015L3.103 7.741L0.611 10.519L2.758 13.297L2.413 17.023L6.064 17.847L7.974 21.048L11.655 19.465L15.336 21.048L17.246 17.847L20.897 17.023L20.552 13.297L22.699 10.519H23.389ZM10.526 15.111L6.776 11.361L8.243 9.894L10.526 12.177L15.757 6.946L17.224 8.413L10.526 15.111Z"/></svg>`;
 
-    let allPostsData = [], userCache = {}, myFollowing = {}, myUid = "", currentPostId = "";
+    // ==================== CONFIGURATION ====================
+    const POSTS_PER_PAGE = 50;
+    const POLL_INTERVAL = 30000;       // 30 সেকেন্ডে নতুন পোস্ট চেক
+    const USER_CACHE_TTL = 1800000;    // 30 মিনিট ইউজার ক্যাশ TTL
+    
+    // Cache Keys
+    const CACHE = {
+        POSTS: 'sb_posts_v3',
+        USERS: 'sb_users_v3',
+        FOLLOWING: 'sb_following_',
+        META: 'sb_meta_v3'
+    };
 
+    // ==================== GLOBAL STATE ====================
+    let allPosts = [];
+    let displayedCount = 0;
+    let userCache = {};
+    let myFollowing = {};
+    let myUid = "";
+    let currentPostId = "";
+    let hasMorePosts = true;
+    let isLoading = false;
+    let newestTimestamp = 0;
+    let oldestTimestamp = Infinity;
+    let pollingTimer = null;
+    let newPostsCount = 0;
+    let activeStatusListeners = {};
+    let imageObserver = null;
+
+    // ==================== CACHE UTILITIES ====================
+    function saveCache(key, data) {
+        try {
+            localStorage.setItem(key, JSON.stringify(data));
+        } catch (e) {
+            // Storage ভরে গেলে পুরানো ডাটা মুছে দাও
+            cleanCache();
+        }
+    }
+
+    function loadCache(key) {
+        try {
+            const raw = localStorage.getItem(key);
+            return raw ? JSON.parse(raw) : null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function cleanCache() {
+        // শুধু আমাদের ক্যাশ keys মুছবে
+        const keysToRemove = [];
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith('sb_')) keysToRemove.push(key);
+        }
+        keysToRemove.forEach(k => localStorage.removeItem(k));
+    }
+
+    // ==================== IMAGE OPTIMIZATION ====================
+    function getOptimizedImageUrl(url, width = 300) {
+        if (!url) return '';
+        if (url.includes('cloudinary.com')) {
+            return url.replace('/upload/', `/upload/f_auto,q_80,w_${width}/`);
+        }
+        return url;
+    }
+
+    function getLowQualityImageUrl(url) {
+        if (!url) return '';
+        if (url.includes('cloudinary.com')) {
+            return url.replace('/upload/', `/upload/f_auto,q_20,w_50/`);
+        }
+        return url;
+    }
+
+    // ==================== TIME AGO ====================
+    function timeAgo(timestamp) {
+        if (!timestamp) return "Just now";
+        const seconds = Math.floor((Date.now() - timestamp) / 1000);
+        if (seconds < 60) return "Just now";
+        if (seconds < 3600) return Math.floor(seconds / 60) + "m";
+        if (seconds < 86400) return Math.floor(seconds / 3600) + "h";
+        if (seconds < 604800) return Math.floor(seconds / 86400) + "d";
+        return Math.floor(seconds / 604800) + "w";
+    }
+
+    // ==================== TEXT TRUNCATION ====================
+    function truncateText(text, limit = 150) {
+        if (!text) return { display: '', needsMore: false, full: '' };
+        if (text.length <= limit) return { display: text, needsMore: false, full: text };
+        return {
+            display: text.substring(0, limit) + '...',
+            needsMore: true,
+            full: text
+        };
+    }
+
+    // ==================== DEBOUNCE ====================
+    let searchTimeout = null;
+    function debouncedSearch() {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(handleSearch, 400);
+    }
+
+    // ==================== SLIM POST FOR CACHE ====================
+    function slimPostForCache(post) {
+        return {
+            id: post.id,
+            uid: post.uid,
+            text: post.text || '',
+            timestamp: post.timestamp,
+            imageUrl: post.imageUrl || '',
+            background: post.background || '',
+            isLiked: !!(post.likedBy && post.likedBy[myUid]),
+            likeCount: post.likedBy ? Object.keys(post.likedBy).length : 0,
+            commentCount: post.comments ? Object.keys(post.comments).length : 0,
+            fullName: post.fullName || "User",
+            profilePic: post.profilePic || '',
+            isVerified: post.isVerified || false
+        };
+    }
+
+    // Enrich raw Firebase post with user data
+    function enrichPost(rawPost, id) {
+        const user = userCache[rawPost.uid] || { fullName: "User", profilePic: '', isVerified: false };
+        return {
+            id: id,
+            uid: rawPost.uid,
+            text: rawPost.text || '',
+            timestamp: rawPost.timestamp,
+            imageUrl: rawPost.imageUrl || '',
+            background: rawPost.background || '',
+            isLiked: !!(rawPost.likedBy && rawPost.likedBy[myUid]),
+            likeCount: rawPost.likedBy ? Object.keys(rawPost.likedBy).length : 0,
+            commentCount: rawPost.comments ? Object.keys(rawPost.comments).length : 0,
+            fullName: user.fullName || "User",
+            profilePic: getOptimizedImageUrl(user.profilePic, 200),
+            isVerified: user.isVerified || false
+        };
+    }
+
+    // ==================== IMAGE LAZY LOADING ====================
+    function setupImageObserver() {
+        if (imageObserver) return;
+        imageObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const img = entry.target;
+                    const lowSrc = img.dataset.low;
+                    const normalSrc = img.dataset.normal;
+                    if (lowSrc && normalSrc) {
+                        // প্রথমে low quality দেখাও
+                        img.src = lowSrc;
+                        img.classList.add('loaded');
+                        // তারপর normal quality লোড করো
+                        const fullImg = new Image();
+                        fullImg.src = normalSrc;
+                        fullImg.onload = () => { img.src = normalSrc; };
+                        imageObserver.unobserve(img);
+                    }
+                }
+            });
+        }, { rootMargin: '200px' });
+    }
+
+    function observeAllLazyImages() {
+        if (!imageObserver) return;
+        document.querySelectorAll('img[data-low]:not(.observed)').forEach(img => {
+            img.classList.add('observed');
+            imageObserver.observe(img);
+        });
+    }
+
+    // ==================== AUTH STATE ====================
     auth.onAuthStateChanged(user => {
         if (user) {
             myUid = user.uid;
-            // logic: No status set/update here (Self-Active off)
-            checkUserLock(user.uid);
-        } else { window.location.href = "login.html"; }
+            setupImageObserver();
+            init();
+        } else {
+            window.location.href = "login.html";
+        }
     });
 
-    function checkUserLock(uid) {
-        db.ref(`user-info/${uid}/profile`).on('value', snap => {
-            if (snap.val()?.status === 'blocked') {
-                window.location.href = "error.html";
-                return;
-            }
-            loadBaseData(); 
-        });
+    // ==================== INITIALIZATION ====================
+    async function init() {
+        // Step 1: LocalStorage থেকে ক্যাশ লোড করো
+        loadFromCache();
+
+        if (allPosts.length > 0) {
+            // ক্যাশে ডাটা আছে - তৎক্ষণাৎ দেখাও, Firebase থেকে আবার লোড করবে না
+            displayedCount = Math.min(POSTS_PER_PAGE, allPosts.length);
+            renderPosts(0, displayedCount, false);
+            updateLoadMoreUI();
+            showCacheInfo();
+
+            // Background এ নতুন পোস্ট চেক করো
+            setTimeout(() => checkForNewPosts(), 2000);
+        } else {
+            // প্রথমবার - Firebase থেকে লোড করতে হবে
+            showSkeletonLoader(5);
+            await fetchInitialPosts();
+        }
+
+        // ফলোয়িং লিস্ট লোড (ক্যাশে না থাকলে)
+        if (Object.keys(myFollowing).length === 0) {
+            fetchFollowing();
+        }
+
+        // পোলিং শুরু
+        startPolling();
     }
 
-    function loadBaseData() {
-        db.ref('user-info').on('value', uSnap => {
-            uSnap.forEach(u => { userCache[u.key] = u.val().profile; });
-            db.ref(`user-following/${myUid}`).on('value', fSnap => {
-                myFollowing = fSnap.val() || {};
-                db.ref('posts').on('value', pSnap => {
-                    allPostsData = [];
-                    pSnap.forEach(p => {
-                        const d = p.val();
-                        const u = userCache[d.uid] || { fullName: "User" };
-                        allPostsData.push({ id: p.key, ...d, ...u, uid: d.uid });
-                    });
-                    allPostsData.sort((a,b) => b.timestamp - a.timestamp);
-                    renderFeed();
-                });
-            });
-        });
+    function loadFromCache() {
+        const cachedPosts = loadCache(CACHE.POSTS);
+        const cachedUsers = loadCache(CACHE.USERS);
+        const cachedFollowing = loadCache(CACHE.FOLLOWING + myUid);
+        const cachedMeta = loadCache(CACHE.META);
+
+        if (cachedUsers) userCache = cachedUsers;
+        if (cachedFollowing) myFollowing = cachedFollowing;
+
+        if (cachedPosts && cachedPosts.length > 0) {
+            allPosts = cachedPosts;
+            newestTimestamp = allPosts[0].timestamp || 0;
+            oldestTimestamp = allPosts[allPosts.length - 1].timestamp || Infinity;
+        }
+
+        if (cachedMeta) {
+            hasMorePosts = cachedMeta.hasMore !== false;
+        }
     }
 
-    function renderFeed() {
-        const term = document.getElementById('searchInput').value.toLowerCase();
+    function showCacheInfo() {
+        const info = document.getElementById('cacheInfo');
+        if (!info) return;
+        const totalCached = allPosts.length;
+        const showing = Math.min(displayedCount, totalCached);
+        info.textContent = `Showing ${showing} of ${totalCached} cached posts`;
+        info.classList.remove('hidden');
+    }
+
+    // ==================== SKELETON LOADER ====================
+    function showSkeletonLoader(count = 3) {
         const container = document.getElementById('postsContainer');
-        const filtered = allPostsData.filter(p => 
-            p.fullName.toLowerCase().includes(term) || 
-            (p.text && p.text.toLowerCase().includes(term))
+        container.innerHTML = Array(count).fill(0).map(() => `
+            <div class="post-card p-4">
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="w-10 h-10 rounded-full skeleton"></div>
+                    <div class="flex-1"><div class="h-4 skeleton rounded w-32 mb-2"></div><div class="h-3 skeleton rounded w-20"></div></div>
+                </div>
+                <div class="h-3 skeleton rounded w-full mb-2"></div>
+                <div class="h-3 skeleton rounded w-3/4 mb-4"></div>
+                <div class="h-48 skeleton rounded mb-4"></div>
+                <div class="flex gap-2"><div class="h-8 skeleton rounded flex-1"></div><div class="h-8 skeleton rounded flex-1"></div></div>
+            </div>
+        `).join('');
+    }
+
+    // ==================== FETCH INITIAL POSTS ====================
+    async function fetchInitialPosts() {
+        if (isLoading) return;
+        isLoading = true;
+
+        try {
+            // Firebase থেকে সর্বশেষ 50 পোস্ট নাও
+            const snap = await db.ref('posts').orderByChild('timestamp').limitToLast(POSTS_PER_PAGE).once('value');
+            const rawPosts = [];
+            const uidsNeeded = new Set();
+
+            snap.forEach(child => {
+                const post = child.val();
+                rawPosts.push({ id: child.key, ...post });
+                if (!userCache[post.uid]) uidsNeeded.add(post.uid);
+            });
+
+            // শুধু মিসিং ইউজারদের ডাটা ফেচ করো
+            if (uidsNeeded.size > 0) {
+                await fetchMissingUsers([...uidsNeeded]);
+            }
+
+            // পোস্ট enrich করো
+            const posts = rawPosts.map(p => enrichPost(p, p.id)).sort((a, b) => b.timestamp - a.timestamp);
+
+            allPosts = posts;
+            if (allPosts.length > 0) {
+                newestTimestamp = allPosts[0].timestamp;
+                oldestTimestamp = allPosts[allPosts.length - 1].timestamp;
+            }
+
+            hasMorePosts = rawPosts.length >= POSTS_PER_PAGE;
+            displayedCount = allPosts.length;
+
+            // ক্যাশে সেভ করো
+            saveAllCache();
+
+            // UI আপডেট
+            renderPosts(0, displayedCount, false);
+            updateLoadMoreUI();
+            showCacheInfo();
+
+        } catch (e) {
+            console.error('Fetch error:', e);
+            document.getElementById('postsContainer').innerHTML = `
+                <div class="text-center py-10 text-gray-500">
+                    <i class="fas fa-exclamation-circle text-3xl mb-3 block"></i>
+                    Failed to load posts. <button onclick="fetchInitialPosts()" class="text-blue-500 underline">Retry</button>
+                </div>`;
+        }
+
+        isLoading = false;
+    }
+
+    // ==================== FETCH MISSING USERS ====================
+    async function fetchMissingUsers(uids) {
+        if (!uids || uids.length === 0) return;
+
+        const promises = uids.map(uid =>
+            db.ref(`user-info/${uid}/profile`).once('value').then(snap => {
+                if (snap.val()) {
+                    userCache[uid] = snap.val();
+                }
+            }).catch(() => {})
         );
 
-        if (filtered.length === 0) {
-            container.innerHTML = `<div class="text-center py-20 text-gray-500">No results found</div>`;
+        await Promise.all(promises);
+        saveCache(CACHE.USERS, userCache);
+    }
+
+    // ==================== FETCH FOLLOWING ====================
+    async function fetchFollowing() {
+        try {
+            const snap = await db.ref(`user-following/${myUid}`).once('value');
+            myFollowing = snap.val() || {};
+            saveCache(CACHE.FOLLOWING + myUid, myFollowing);
+        } catch (e) {}
+    }
+
+    // ==================== FETCH OLDER POSTS (PAGINATION) ====================
+    async function fetchOlderPosts() {
+        if (isLoading || !hasMorePosts) return;
+        isLoading = true;
+
+        // Loading state
+        const spinner = document.getElementById('loadMoreSpinner');
+        const loadText = document.getElementById('loadMoreText');
+        const loadBtn = document.getElementById('loadMoreBtn');
+        if (spinner) spinner.classList.remove('hidden');
+        if (loadText) loadText.textContent = 'Loading...';
+        if (loadBtn) loadBtn.disabled = true;
+
+        try {
+            // সবচেয়ে পুরানো timestamp এর আগের পোস্ট নাও
+            const query = oldestTimestamp < Infinity
+                ? db.ref('posts').orderByChild('timestamp').endAt(oldestTimestamp - 1).limitToLast(POSTS_PER_PAGE)
+                : db.ref('posts').orderByChild('timestamp').limitToLast(POSTS_PER_PAGE);
+
+            const snap = await query.once('value');
+            const rawPosts = [];
+            const uidsNeeded = new Set();
+
+            snap.forEach(child => {
+                const post = child.val();
+                // ডুপ্লিকেট চেক
+                if (!allPosts.some(p => p.id === child.key)) {
+                    rawPosts.push({ id: child.key, ...post });
+                    if (!userCache[post.uid]) uidsNeeded.add(post.uid);
+                }
+            });
+
+            // মিসিং ইউজার ফেচ
+            if (uidsNeeded.size > 0) {
+                await fetchMissingUsers([...uidsNeeded]);
+            }
+
+            // Enrich করো
+            const newPosts = rawPosts.map(p => enrichPost(p, p.id)).sort((a, b) => b.timestamp - a.timestamp);
+
+            if (newPosts.length > 0) {
+                allPosts = [...allPosts, ...newPosts];
+                oldestTimestamp = allPosts[allPosts.length - 1].timestamp;
+            }
+
+            hasMorePosts = rawPosts.length >= POSTS_PER_PAGE;
+
+            // ক্যাশে সেভ
+            saveAllCache();
+
+            // নতুন পোস্ট append করো
+            const startIndex = displayedCount;
+            const newCount = Math.min(POSTS_PER_PAGE, allPosts.length - displayedCount);
+            displayedCount += newCount;
+            renderPosts(startIndex, newCount, true);
+            updateLoadMoreUI();
+            showCacheInfo();
+
+        } catch (e) {
+            console.error('Fetch older posts error:', e);
+        }
+
+        // Reset loading state
+        if (spinner) spinner.classList.add('hidden');
+        if (loadText) loadText.textContent = 'Show More Posts';
+        if (loadBtn) loadBtn.disabled = false;
+        isLoading = false;
+    }
+
+    // ==================== CHECK FOR NEW POSTS ====================
+    async function checkForNewPosts() {
+        if (newestTimestamp === 0) return;
+
+        try {
+            // newestTimestamp এর পরের নতুন পোস্ট চেক
+            const snap = await db.ref('posts').orderByChild('timestamp').startAt(newestTimestamp).limitToLast(20).once('value');
+            let count = 0;
+            snap.forEach(child => {
+                if (!allPosts.some(p => p.id === child.key)) count++;
+            });
+
+            if (count > 0) {
+                newPostsCount = count;
+                showNewPostsNotification(count);
+            }
+        } catch (e) {}
+    }
+
+    // ==================== REFRESH WITH NEW POSTS ====================
+    async function refreshWithNewPosts() {
+        hideNewPostsNotification();
+
+        if (newestTimestamp === 0) return;
+
+        try {
+            const snap = await db.ref('posts').orderByChild('timestamp').startAt(newestTimestamp).limitToLast(50).once('value');
+            const rawPosts = [];
+            const uidsNeeded = new Set();
+
+            snap.forEach(child => {
+                if (!allPosts.some(p => p.id === child.key)) {
+                    const post = child.val();
+                    rawPosts.push({ id: child.key, ...post });
+                    if (!userCache[post.uid]) uidsNeeded.add(post.uid);
+                }
+            });
+
+            if (uidsNeeded.size > 0) {
+                await fetchMissingUsers([...uidsNeeded]);
+            }
+
+            const newPosts = rawPosts.map(p => enrichPost(p, p.id)).sort((a, b) => b.timestamp - a.timestamp);
+
+            if (newPosts.length > 0) {
+                // নতুন পোস্ট সামনে যোগ করো
+                allPosts = [...newPosts, ...allPosts];
+                newestTimestamp = allPosts[0].timestamp;
+
+                // ক্যাশে সেভ
+                saveAllCache();
+
+                // পুরো ফিড রিফ্রেশ (নতুন পোস্ট উপরে দেখাতে হবে)
+                displayedCount = Math.min(POSTS_PER_PAGE, allPosts.length);
+                renderPosts(0, displayedCount, false);
+                updateLoadMoreUI();
+                showCacheInfo();
+
+                // উপরে স্ক্রল
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+
+            newPostsCount = 0;
+        } catch (e) {
+            console.error('Refresh error:', e);
+        }
+    }
+
+    // ==================== POLLING ====================
+    function startPolling() {
+        if (pollingTimer) clearInterval(pollingTimer);
+        pollingTimer = setInterval(checkForNewPosts, POLL_INTERVAL);
+    }
+
+    // ==================== SAVE ALL CACHE ====================
+    function saveAllCache() {
+        // পোস্ট ক্যাশ - likedBy এর পুরো অবজেক্ট না রেখে শুধু like count আর isLiked রাখো
+        saveCache(CACHE.POSTS, allPosts);
+        saveCache(CACHE.META, {
+            hasMore: hasMorePosts,
+            newestTimestamp: newestTimestamp,
+            oldestTimestamp: oldestTimestamp,
+            savedAt: Date.now()
+        });
+        saveCache(CACHE.USERS, userCache);
+        saveCache(CACHE.FOLLOWING + myUid, myFollowing);
+    }
+
+    // ==================== RENDER POSTS ====================
+    function renderPosts(startIndex, count, append = false) {
+        const container = document.getElementById('postsContainer');
+        const searchTerm = document.getElementById('searchInput')?.value.toLowerCase() || '';
+
+        let postsToRender;
+        if (searchTerm) {
+            const filtered = allPosts.filter(p =>
+                (p.fullName && p.fullName.toLowerCase().includes(searchTerm)) ||
+                (p.text && p.text.toLowerCase().includes(searchTerm))
+            );
+            postsToRender = filtered.slice(startIndex, startIndex + count);
+        } else {
+            postsToRender = allPosts.slice(startIndex, startIndex + count);
+        }
+
+        if (postsToRender.length === 0 && !append) {
+            container.innerHTML = `<div class="text-center py-10 text-gray-500">No posts found</div>`;
             return;
         }
 
-        container.innerHTML = filtered.map(post => {
-            const isLiked = post.likedBy && post.likedBy[myUid];
-            const hasBg = post.background && post.background !== "none";
-            const badge = post.isVerified ? blueBadge : "";
-            let followBtn = (post.uid !== myUid) ? 
-                `<button onclick="handleFollow('${post.uid}', event)" class="follow-btn ${myFollowing[post.uid] ? 'text-gray-400' : 'text-blue-500'}">${myFollowing[post.uid] ? 'Following' : 'Follow'}</button>` : "";
+        const html = postsToRender.map(post => createPostHTML(post)).join('');
 
-            return `
-            <div class="post-card">
-                <div class="p-3 flex items-center gap-2">
-                    <div class="relative cursor-pointer" onclick="openSmartPopup('profile.html?uid=${post.uid}', '${post.fullName}')">
-                        <img src="${post.profilePic || 'https://ui-avatars.com/api/?name='+post.fullName}" class="h-10 w-10 rounded-full border">
-                        <div id="stat-${post.id}" class="status-dot offline"></div>
+        if (append) {
+            container.insertAdjacentHTML('beforeend', html);
+        } else {
+            container.innerHTML = html;
+        }
+
+        // Lazy images observe করো
+        observeAllLazyImages();
+
+        // Visible posts এর status observe করো
+        observeVisibleStatuses();
+    }
+
+    // ==================== CREATE POST HTML ====================
+    function createPostHTML(post) {
+        const isLiked = post.isLiked;
+        const badge = post.isVerified ? blueBadge : "";
+        const hasBackground = post.background && post.background !== "none" && post.background !== "";
+
+        // Read More
+        const textObj = truncateText(post.text, 150);
+        let textHTML;
+        if (textObj.needsMore) {
+            const encodedFull = encodeURIComponent(textObj.full);
+            textHTML = `<span class="post-text">${textObj.display}</span>
+                       <span class="read-more-btn" data-full="${encodedFull}">See more</span>`;
+        } else {
+            textHTML = `<span class="post-text">${textObj.display}</span>`;
+        }
+
+        // Follow Button
+        let followBtn = '';
+        if (post.uid !== myUid) {
+            const isFollowing = myFollowing[post.uid];
+            followBtn = `<button onclick="handleFollow('${post.uid}', event)" 
+                        class="follow-btn ${isFollowing ? 'following' : ''}">
+                        ${isFollowing ? 'Following' : 'Follow'}</button>`;
+        }
+
+        // Banner/Background Post
+        let contentHTML = '';
+        if (hasBackground) {
+            contentHTML = `<div class="colored-content" style="background: ${post.background};">${textHTML}</div>`;
+        } else {
+            contentHTML = `<div class="px-4 pb-2 text-[15px]">${textHTML}</div>`;
+        }
+
+        // Image
+        let imageHTML = '';
+        if (post.imageUrl && !hasBackground) {
+            imageHTML = `
+                <div class="px-4 pb-3">
+                    <img data-low="${getLowQualityImageUrl(post.imageUrl)}" 
+                         data-normal="${getOptimizedImageUrl(post.imageUrl, 500)}"
+                         src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='500' height='300' viewBox='0 0 500 300'%3E%3Crect width='500' height='300' fill='%23f0f2f5'/%3E%3C/svg%3E"
+                         class="w-full rounded-lg lazy-image"
+                         style="max-height: 400px; object-fit: cover;"
+                         loading="lazy">
+                </div>
+            `;
+        }
+
+        const likeCount = post.likeCount || 0;
+        const commentCount = post.commentCount || 0;
+
+        return `
+        <div class="post-card" data-post-id="${post.id}">
+            <div class="p-4 flex items-center gap-3">
+                <div class="relative cursor-pointer" onclick="openProfile('${post.uid}')">
+                    <img data-low="${getLowQualityImageUrl(post.profilePic)}" 
+                         data-normal="${getOptimizedImageUrl(post.profilePic, 100)}"
+                         src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' fill='%23f0f2f5'/%3E%3C/svg%3E"
+                         class="w-10 h-10 rounded-full lazy-image"
+                         alt="${post.fullName}">
+                    <span class="status-dot offline" id="status-${post.id}"></span>
+                </div>
+                <div class="flex-1">
+                    <div class="flex items-center">
+                        <span class="font-semibold hover:underline cursor-pointer" 
+                              onclick="openProfile('${post.uid}')">
+                            ${post.fullName}
+                        </span>
+                        ${badge}
+                        ${followBtn}
                     </div>
-                    <div class="flex-1">
-                        <p class="text-[14px] font-bold flex items-center">${post.fullName}${badge}${followBtn}</p>
-                        <p class="text-[11px] text-gray-500">${timeAgo(post.timestamp)} ago</p>
-                    </div>
+                    <div class="text-xs text-gray-500">${timeAgo(post.timestamp)}</div>
                 </div>
-                <div class="${hasBg ? 'colored-content' : 'px-4 pb-3 text-[15px]'}" style="background:${hasBg ? post.background : 'white'}">${post.text || ''}</div>
-                <div class="px-4 py-2 flex justify-between text-[12px] text-gray-500 border-b mx-3">
-                    <span><i class="fas fa-thumbs-up text-blue-500"></i> ${post.likedBy ? Object.keys(post.likedBy).length : 0}</span>
-                    <span onclick="openComments('${post.id}')" class="cursor-pointer hover:underline">${post.comments ? Object.keys(post.comments).length : 0} comments</span>
-                </div>
-                <div class="px-2 py-1 flex">
-                    <button onclick="handleLike('${post.id}')" class="action-btn ${isLiked ? 'active-like' : ''}"><i class="${isLiked?'fas':'far'} fa-thumbs-up"></i> Like</button>
-                    <button onclick="openComments('${post.id}')" class="action-btn"><i class="far fa-comment"></i> Comment</button>
-                    <button onclick="openSmartPopup('chat.html?uid=${post.uid}', '${post.fullName}')" class="action-btn"><i class="far fa-paper-plane"></i> Message</button>
-                </div>
-            </div>`;
-        }).join('');
-        filtered.forEach(p => observeStatus(p.uid, `stat-${p.id}`));
+            </div>
+
+            ${contentHTML}
+            ${imageHTML}
+
+            <div class="px-4 py-2 flex justify-between text-sm text-gray-500 border-b mx-3">
+                <span><i class="fas fa-thumbs-up text-blue-500"></i> ${likeCount}</span>
+                <span onclick="openComments('${post.id}')" class="cursor-pointer hover:underline">
+                    ${commentCount} comments
+                </span>
+            </div>
+
+            <div class="px-2 py-1 flex">
+                <button onclick="handleLike('${post.id}')" 
+                        class="action-btn ${isLiked ? 'active-like' : ''}" id="likeBtn-${post.id}">
+                    <i class="${isLiked ? 'fas' : 'far'} fa-thumbs-up"></i> Like
+                </button>
+                <button onclick="openComments('${post.id}')" class="action-btn">
+                    <i class="far fa-comment"></i> Comment
+                </button>
+            </div>
+        </div>`;
+    }
+
+    // ==================== LOAD MORE ====================
+    function handleLoadMore() {
+        if (allPosts.length > displayedCount) {
+            // ক্যাশে আরও পোস্ট আছে - Firebase থেকে লোড করার দরকার নেই
+            const nextCount = Math.min(POSTS_PER_PAGE, allPosts.length - displayedCount);
+            const startIndex = displayedCount;
+            displayedCount += nextCount;
+            renderPosts(startIndex, nextCount, true);
+            updateLoadMoreUI();
+            showCacheInfo();
+        } else if (hasMorePosts) {
+            // Firebase থেকে আরও পোস্ট লোড করো
+            fetchOlderPosts();
+        } else {
+            // আর পোস্ট নেই
+            updateLoadMoreUI();
+        }
+    }
+
+    function updateLoadMoreUI() {
+        const loadMoreContainer = document.getElementById('loadMoreContainer');
+        const allCaughtUp = document.getElementById('allCaughtUp');
+        const loadBtn = document.getElementById('loadMoreBtn');
+
+        if (displayedCount < allPosts.length) {
+            // ক্যাশে আরও আছে
+            loadMoreContainer.classList.remove('hidden');
+            allCaughtUp.classList.add('hidden');
+            if (loadBtn) loadBtn.style.display = 'block';
+        } else if (hasMorePosts) {
+            // Firebase এ আরও থাকতে পারে
+            loadMoreContainer.classList.remove('hidden');
+            allCaughtUp.classList.add('hidden');
+            if (loadBtn) loadBtn.style.display = 'block';
+        } else {
+            // সব শেষ
+            loadMoreContainer.classList.add('hidden');
+            allCaughtUp.classList.remove('hidden');
+        }
+    }
+
+    // ==================== NEW POSTS NOTIFICATION ====================
+    function showNewPostsNotification(count) {
+        const notif = document.getElementById('newPostNotification');
+        document.getElementById('newPostCount').innerText = `${count} new post${count > 1 ? 's' : ''}`;
+        notif.classList.remove('hidden');
+    }
+
+    function hideNewPostsNotification() {
+        document.getElementById('newPostNotification').classList.add('hidden');
+    }
+
+    // ==================== SEARCH ====================
+    function handleSearch() {
+        const term = document.getElementById('searchInput')?.value.toLowerCase() || '';
+        const container = document.getElementById('postsContainer');
+        const loadMoreContainer = document.getElementById('loadMoreContainer');
+        const allCaughtUp = document.getElementById('allCaughtUp');
+
+        if (term) {
+            const filtered = allPosts.filter(p =>
+                (p.fullName && p.fullName.toLowerCase().includes(term)) ||
+                (p.text && p.text.toLowerCase().includes(term))
+            );
+            if (filtered.length > 0) {
+                container.innerHTML = filtered.map(post => createPostHTML(post)).join('');
+                observeAllLazyImages();
+            } else {
+                container.innerHTML = '<div class="text-center py-10 text-gray-500">No results found</div>';
+            }
+            loadMoreContainer.classList.add('hidden');
+            allCaughtUp.classList.add('hidden');
+        } else {
+            displayedCount = Math.min(POSTS_PER_PAGE, allPosts.length);
+            renderPosts(0, displayedCount, false);
+            updateLoadMoreUI();
+            showCacheInfo();
+        }
+    }
+
+    // ==================== STATUS OBSERVATION ====================
+    function observeVisibleStatuses() {
+        // শুধু দৃশ্যমান পোস্টের status observe করো
+        document.querySelectorAll('.post-card[data-post-id]').forEach(card => {
+            const postId = card.dataset.postId;
+            const post = allPosts.find(p => p.id === postId);
+            if (post && !activeStatusListeners[post.uid]) {
+                activeStatusListeners[post.uid] = true;
+                observeStatus(post.uid, `status-${postId}`);
+            }
+        });
     }
 
     function observeStatus(uid, dotId) {
         db.ref(`status/${uid}`).on('value', snap => {
             const dot = document.getElementById(dotId);
-            if(!dot) return;
+            if (!dot) return;
             const data = snap.val();
-            const isOnline = data && (data.state === 'online' || Date.now() < data.last);
+            const isOnline = data && (data.state === 'online' || (data.last && Date.now() - data.last < 60000));
             dot.className = `status-dot ${isOnline ? 'online' : 'offline'}`;
         });
     }
 
-    // --- Comment Functions ---
-    function openComments(pid) {
-        currentPostId = pid;
+    // ==================== PROFILE ====================
+    window.openProfile = function(uid) {
+        openSmartPopup(`profile.html?uid=${uid}`, 'Profile');
+    };
+
+    // ==================== LIKE ====================
+    async function handleLike(postId) {
+        const postIndex = allPosts.findIndex(p => p.id === postId);
+        if (postIndex === -1) return;
+
+        const post = allPosts[postIndex];
+        const wasLiked = post.isLiked;
+
+        // Optimistic UI update - তৎক্ষণাৎ UI আপডেট
+        post.isLiked = !wasLiked;
+        post.likeCount = wasLiked ? Math.max(0, post.likeCount - 1) : post.likeCount + 1;
+
+        // UI আপডেট
+        const likeBtn = document.getElementById(`likeBtn-${postId}`);
+        if (likeBtn) {
+            likeBtn.className = `action-btn ${post.isLiked ? 'active-like' : ''}`;
+            likeBtn.innerHTML = `<i class="${post.isLiked ? 'fas' : 'far'} fa-thumbs-up"></i> Like`;
+        }
+
+        // Like count আপডেট
+        const card = document.querySelector(`.post-card[data-post-id="${postId}"]`);
+        if (card) {
+            const countSpan = card.querySelector('.fa-thumbs-up')?.parentElement;
+            if (countSpan) {
+                countSpan.innerHTML = `<i class="fas fa-thumbs-up text-blue-500"></i> ${post.likeCount}`;
+            }
+        }
+
+        // Firebase এ আপডেট
+        try {
+            const likeRef = db.ref(`posts/${postId}/likedBy/${myUid}`);
+            if (wasLiked) {
+                await likeRef.remove();
+            } else {
+                await likeRef.set(true);
+            }
+            // ক্যাশে সেভ
+            saveCache(CACHE.POSTS, allPosts);
+        } catch (e) {
+            // ব্যর্থ হলে revert
+            post.isLiked = wasLiked;
+            post.likeCount = wasLiked ? post.likeCount + 1 : Math.max(0, post.likeCount - 1);
+            if (likeBtn) {
+                likeBtn.className = `action-btn ${wasLiked ? 'active-like' : ''}`;
+                likeBtn.innerHTML = `<i class="${wasLiked ? 'fas' : 'far'} fa-thumbs-up"></i> Like`;
+            }
+        }
+    }
+
+    // ==================== FOLLOW ====================
+    async function handleFollow(targetUid, event) {
+        event.stopPropagation();
+        const wasFollowing = !!myFollowing[targetUid];
+
+        // Optimistic UI
+        if (wasFollowing) {
+            delete myFollowing[targetUid];
+        } else {
+            myFollowing[targetUid] = true;
+        }
+
+        // UI আপডেট
+        const buttons = document.querySelectorAll(`.follow-btn[onclick*="'${targetUid}'"]`);
+        buttons.forEach(btn => {
+            btn.innerText = wasFollowing ? 'Follow' : 'Following';
+            btn.className = `follow-btn ${wasFollowing ? '' : 'following'}`;
+        });
+
+        // Firebase
+        try {
+            const followRef = db.ref(`user-following/${myUid}/${targetUid}`);
+            if (wasFollowing) {
+                await followRef.remove();
+            } else {
+                await followRef.set(true);
+            }
+            saveCache(CACHE.FOLLOWING + myUid, myFollowing);
+        } catch (e) {
+            // Revert
+            if (wasFollowing) {
+                myFollowing[targetUid] = true;
+            } else {
+                delete myFollowing[targetUid];
+            }
+            buttons.forEach(btn => {
+                btn.innerText = wasFollowing ? 'Following' : 'Follow';
+                btn.className = `follow-btn ${wasFollowing ? 'following' : ''}`;
+            });
+        }
+    }
+
+    // ==================== COMMENTS ====================
+    window.openComments = function(postId) {
+        currentPostId = postId;
         document.getElementById('commentDrawer').classList.add('open');
         document.body.style.overflow = "hidden";
         history.pushState({ popup: true }, "");
-        
-        db.ref(`posts/${pid}/comments`).on('value', snap => {
-            const list = document.getElementById('commentList');
-            const arr = []; snap.forEach(c => { arr.push(c.val()); });
-            arr.sort((a,b) => b.timestamp - a.timestamp);
-            
-            list.innerHTML = arr.map(c => {
-                const u = userCache[c.uid] || { fullName: "User" };
-                return `<div class="flex items-start gap-2">
-                    <img onclick="openSmartPopup('profile.html?uid=${c.uid}', '${u.fullName}')" src="${u.profilePic || 'https://ui-avatars.com/api/?name='+u.fullName}" class="w-8 h-8 rounded-full border cursor-pointer">
-                    <div class="flex-1">
-                        <div class="comment-bubble inline-block">
-                            <p class="text-[12px] font-bold text-gray-800">${u.fullName}</p>
-                            <p class="text-[13px] text-gray-700">${c.text}</p>
-                        </div>
-                        <p class="text-[10px] text-gray-500 ml-2 mt-1">${timeAgo(c.timestamp)} ago</p>
-                    </div>
-                </div>`;
-            }).join('') || '<div class="text-center py-10 text-gray-400">No comments yet</div>';
-        });
-    }
 
-    function submitComment() {
-        const inp = document.getElementById('commentInput');
-        if(inp.value.trim() && currentPostId) {
-            db.ref(`posts/${currentPostId}/comments`).push({ 
-                uid: myUid, 
-                text: inp.value.trim(), 
-                timestamp: Date.now() 
+        // Comments সবসময় Firebase থেকে লোড (ক্যাশে রাখার দরকার নেই, রিয়েলটাইম দরকার)
+        db.ref(`posts/${postId}/comments`).once('value', snap => {
+            const comments = [];
+            const uidsNeeded = new Set();
+            snap.forEach(child => {
+                const comment = child.val();
+                comments.push({ id: child.key, ...comment });
+                if (!userCache[comment.uid]) uidsNeeded.add(comment.uid);
             });
-            inp.value = "";
-        }
+
+            // মিসিং ইউজার ফেচ
+            if (uidsNeeded.size > 0) {
+                fetchMissingUsers([...uidsNeeded]).then(() => renderComments(comments));
+            } else {
+                renderComments(comments);
+            }
+        });
+    };
+
+    function renderComments(comments) {
+        const list = document.getElementById('commentList');
+        const sorted = comments.sort((a, b) => b.timestamp - a.timestamp);
+        list.innerHTML = sorted.map(c => {
+            const user = userCache[c.uid] || { fullName: "User", profilePic: '' };
+            return `
+            <div class="flex gap-2">
+                <img src="${getLowQualityImageUrl(user.profilePic) || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(user.fullName || 'U')}" 
+                     class="w-8 h-8 rounded-full cursor-pointer"
+                     onclick="openProfile('${c.uid}')">
+                <div class="flex-1">
+                    <div class="bg-gray-100 rounded-2xl px-3 py-2 inline-block max-w-[85%]">
+                        <span class="font-semibold text-sm block hover:underline cursor-pointer"
+                              onclick="openProfile('${c.uid}')">${user.fullName || 'User'}</span>
+                        <span class="text-sm">${c.text}</span>
+                    </div>
+                    <span class="text-xs text-gray-500 ml-2">${timeAgo(c.timestamp)}</span>
+                </div>
+            </div>`;
+        }).join('') || '<div class="text-center py-10 text-gray-400">No comments yet</div>';
     }
 
-    function timeAgo(ts) {
-        const s = Math.floor((Date.now() - ts) / 1000);
-        if (s < 60) return "Just now";
-        if (s < 3600) return Math.floor(s/60) + "m";
-        if (s < 86400) return Math.floor(s/3600) + "h";
-        return Math.floor(s/86400) + "d";
-    }
+    window.closeComments = function() {
+        document.getElementById('commentDrawer').classList.remove('open');
+        document.body.style.overflow = "auto";
+    };
 
-    function openSmartPopup(url, title) {
+    window.submitComment = function() {
+        const input = document.getElementById('commentInput');
+        if (!input.value.trim() || !currentPostId) return;
+
+        const text = input.value.trim();
+        input.value = "";
+
+        db.ref(`posts/${currentPostId}/comments`).push({
+            uid: myUid,
+            text: text,
+            timestamp: Date.now()
+        }).then(() => {
+            // লোকাল commentCount আপডেট
+            const postIndex = allPosts.findIndex(p => p.id === currentPostId);
+            if (postIndex !== -1) {
+                allPosts[postIndex].commentCount = (allPosts[postIndex].commentCount || 0) + 1;
+                saveCache(CACHE.POSTS, allPosts);
+            }
+            openComments(currentPostId);
+        });
+    };
+
+    // ==================== SMART POPUP ====================
+    window.openSmartPopup = function(url, title) {
         document.getElementById('overlayTitle').innerText = title;
         document.getElementById('smartIframe').src = url;
-        const ov = document.getElementById('smartOverlay');
-        ov.style.display = 'block';
-        setTimeout(() => ov.classList.add('show'), 10);
+        const overlay = document.getElementById('smartOverlay');
+        overlay.style.display = 'block';
+        setTimeout(() => overlay.classList.add('show'), 10);
         document.body.style.overflow = "hidden";
         history.pushState({ popup: true }, "");
-    }
+    };
 
-    function closeSmartPopup() {
-        const ov = document.getElementById('smartOverlay');
-        ov.classList.remove('show');
+    window.closeSmartPopup = function() {
+        const overlay = document.getElementById('smartOverlay');
+        overlay.classList.remove('show');
         document.body.style.overflow = "auto";
-        setTimeout(() => { ov.style.display = 'none'; document.getElementById('smartIframe').src = ""; }, 400);
-    }
+        setTimeout(() => {
+            overlay.style.display = 'none';
+            document.getElementById('smartIframe').src = "";
+        }, 300);
+    };
 
+    // ==================== BACK BUTTON ====================
     window.onpopstate = function() {
-        if (document.getElementById('smartOverlay').classList.contains('show')) closeSmartPopup();
-        else if (document.getElementById('commentDrawer').classList.contains('open')) {
-            document.getElementById('commentDrawer').classList.remove('open');
-            document.body.style.overflow = "auto";
+        if (document.getElementById('smartOverlay').classList.contains('show')) {
+            closeSmartPopup();
+        } else if (document.getElementById('commentDrawer').classList.contains('open')) {
+            closeComments();
         }
     };
 
-    async function handleLike(pid) {
-        const ref = db.ref(`posts/${pid}/likedBy/${myUid}`);
-        (await ref.get()).exists() ? ref.remove() : ref.set(true);
-    }
+    // ==================== READ MORE (Event Delegation) ====================
+    document.addEventListener('click', function(e) {
+        if (e.target.classList.contains('read-more-btn')) {
+            const fullText = decodeURIComponent(e.target.dataset.full || '');
+            if (fullText) {
+                const parent = e.target.parentElement;
+                const textSpan = parent.querySelector('.post-text');
+                if (textSpan) {
+                    textSpan.textContent = fullText;
+                }
+                e.target.remove();
+            }
+        }
+    });
 
-    async function handleFollow(tUid, e) {
-        e.stopPropagation();
-        const ref = db.ref(`user-following/${myUid}/${tUid}`);
-        (await ref.get()).exists() ? ref.remove() : ref.set(true);
-    }
+    // ==================== VISIBILITY CHANGE ====================
+    document.addEventListener('visibilitychange', function() {
+        if (document.visibilityState === 'visible') {
+            // পেজ আবার visible হলে নতুন পোস্ট চেক করো
+            checkForNewPosts();
+            startPolling();
+        } else {
+            // পেজ hidden হলে পোলিং বন্ধ রাখো (ডাটা বাঁচাও)
+            if (pollingTimer) clearInterval(pollingTimer);
+        }
+    });
 </script>
 </body>
 </html>
