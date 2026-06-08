@@ -30,6 +30,8 @@
         
         #deleteHeader { display: none; position: fixed; top: 0; left: 0; width: 100%; background: #1f2937; color: white; z-index: 100; padding: 15px 20px; align-items: center; justify-content: space-between; animation: slideDown 0.3s ease; }
         @keyframes slideDown { from { transform: translateY(-100%); } to { transform: translateY(0); } }
+        #loadMoreBtn { display: block; width: 90%; margin: 15px auto; padding: 10px; background: #f3f4f6; text-align: center; border-radius: 8px; font-weight: bold; color: #4b5563; cursor: pointer; transition: 0.2s; }
+        #loadMoreBtn:active { background: #e5e7eb; }
     </style>
 
     <script>
@@ -75,6 +77,10 @@
             <i class="fas fa-circle-notch fa-spin mr-2"></i> Loading inbox...
         </div>
     </div>
+    
+    <div id="loadMoreBtn" style="display: none;" onclick="loadMoreChats()">
+        Load More...
+    </div>
 
 <script>
     const firebaseConfig = { 
@@ -88,63 +94,139 @@
 
     let myUid = "";
     let allChatData = [];
+    let displayedCount = 0;
+    const ITEMS_PER_PAGE = 20;
     let selectedChats = new Set();
     let isSelectionMode = false;
+
+    // LocalStorage Helpers
+    const LS_CHAT_KEY = "socialtrade_chats";
+    const LS_IMG_KEY = "socialtrade_imgs";
+
+    function getLsChats() { return JSON.parse(localStorage.getItem(LS_CHAT_KEY) || "{}"); }
+    function setLsChats(data) { localStorage.setItem(LS_CHAT_KEY, JSON.stringify(data)); }
+    function getLsImg(uid) { return localStorage.getItem(LS_IMG_KEY + uid); }
+    function setLsImg(uid, url) { localStorage.setItem(LS_IMG_KEY + uid, url); }
 
     const blueBadgeSvg = `<svg style="width:15px; height:15px; display:inline-block;" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5213 2.62368C11.3147 1.75255 12.6853 1.75255 13.4787 2.62368L14.4989 3.74391C14.8326 4.11041 15.3059 4.30642 15.8039 4.28394L17.3255 4.21526C18.5089 4.16179 19.5041 5.15705 19.4506 6.34045L19.3819 7.86208C19.3595 8.36012 19.5555 8.83342 19.922 9.16713L21.0422 10.1873C21.9133 10.9807 21.9133 12.3513 21.0422 13.1447L19.922 14.1649C19.5555 14.4986 19.3595 14.9719 19.3819 15.4699L19.4506 16.9915C19.5041 18.1749 18.5089 19.1702 17.3255 19.1167L15.8039 19.048C15.3059 19.0255 14.8326 19.2216 14.4989 19.5881L13.4787 20.7083C12.6853 21.5794 11.3147 21.5794 10.5213 20.7083L9.50106 19.5881C9.16735 19.2216 8.69405 19.0255 8.19601 19.048L6.67442 19.1167C5.49103 19.1702 4.49577 18.1749 4.54924 16.9915L4.61792 15.4699C4.6404 14.9719 4.44439 14.4986 4.07789 14.1649L2.95771 13.1447C2.08658 12.3513 2.08658 10.9807 2.95771 10.1873L4.07789 9.16713C4.44439 8.83342 4.6404 8.36012 4.61792 7.86208L4.54924 6.34045C4.49577 5.15705 5.49103 4.16179 6.67442 4.21526L8.19601 4.28394C8.69405 4.30642 9.16735 4.11041 9.50106 3.74391L10.5213 2.62368Z" fill="#1D9BF0"/><path d="M10 12.5L11.5 14L15 10.5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
     auth.onAuthStateChanged(user => {
-        if (user) { myUid = user.uid; loadChats(); } 
+        if (user) { myUid = user.uid; initInbox(); } 
         else { window.parent.location.href = "login.html"; }
     });
 
-    function loadChats() {
+    async function initInbox() {
+        // 1. Load from LocalStorage Instantly
+        const lsChats = getLsChats();
+        const lsKeys = Object.keys(lsChats).filter(key => key.includes(myUid));
+        
+        if (lsKeys.length > 0) {
+            allChatData = lsKeys.map(key => lsChats[key]);
+            allChatData.sort((a, b) => b.time - a.time);
+            displayedCount = 0; 
+            renderChatList(allChatData.slice(0, ITEMS_PER_PAGE), true);
+            checkLoadMore();
+        }
+
+        // 2. Sync with Firebase for updates/new messages (Saves Limit)
         db.ref('chats').on('value', async snap => {
             const allChats = snap.val() || {};
             const myChatKeys = Object.keys(allChats).filter(key => key.includes(myUid));
             
             if (myChatKeys.length === 0) {
+                allChatData = [];
+                setLsChats({});
                 document.getElementById('chatList').innerHTML = `<p class="p-10 text-center text-gray-400">No messages found</p>`;
+                document.getElementById('loadMoreBtn').style.display = 'none';
                 return;
             }
 
             const chatPromises = myChatKeys.map(async key => {
-                const messages = Object.values(allChats[key]);
-                const lastMsg = messages[messages.length - 1];
+                // Load only the last message to save limit
+                const lSnap = await db.ref(`chats/${key}`).orderByChild('timestamp').limitToLast(1).once('value');
+                const lastMsgData = lSnap.val() || {};
+                const lastMsg = Object.values(lastMsgData)[0] || {};
+                
                 const otherUid = key.replace(myUid, "").replace("_", "");
-                const uSnap = await db.ref(`user-info/${otherUid}/profile`).once('value');
-                const profile = uSnap.val() || {};
+                
+                // Profile Sync: Check LS first, else fetch Firebase
+                let profile = {};
+                let lsProfile = lsChats[key] ? lsChats[key].profileData : null;
+                
+                if (lsProfile) {
+                    profile = lsProfile;
+                } else {
+                    const uSnap = await db.ref(`user-info/${otherUid}/profile`).once('value');
+                    profile = uSnap.val() || {};
+                }
 
-                // মেসেজ টাইপ অনুযায়ী টেক্সট সেট করা
                 let displayText = lastMsg ? lastMsg.text : "";
                 if (lastMsg) {
-                    if (lastMsg.type === 'image') {
-                        displayText = "📷 Photo"; 
-                    } else if (lastMsg.type === 'voice') {
-                        displayText = "🎤 Voice Message"; // ভয়েস হলে এই লেখাটি দেখাবে
-                    }
+                    if (lastMsg.type === 'image') displayText = "📷 Photo"; 
+                    else if (lastMsg.type === 'voice') displayText = "🎤 Voice Message"; 
+                }
+
+                // Image LocalStorage Sync
+                let picUrl = profile.profilePic || 'https://ui-avatars.com/api/?name=' + (profile.fullName || "User");
+                if (picUrl.startsWith('http') && getLsImg(otherUid) !== picUrl) {
+                    setLsImg(otherUid, picUrl);
                 }
 
                 return {
                     chatKey: key, uid: otherUid,
                     name: profile.fullName || "User",
-                    pic: profile.profilePic,
+                    pic: picUrl,
                     isVerified: profile.isVerified === true || profile.isVerified === "true",
                     text: displayText,
-                    time: lastMsg ? lastMsg.timestamp : 0
+                    time: lastMsg ? lastMsg.timestamp : 0,
+                    profileData: profile // Save for future LS sync
                 };
             });
 
-            allChatData = await Promise.all(chatPromises);
-            allChatData.sort((a, b) => b.time - a.time);
-            renderChatList(allChatData);
+            let freshData = await Promise.all(chatPromises);
+            freshData.sort((a, b) => b.time - a.time);
+            
+            // Check if update is needed
+            let needsRender = false;
+            if (JSON.stringify(freshData.map(c => c.chatKey)) !== JSON.stringify(allChatData.map(c => c.chatKey))) needsRender = true;
+            freshData.forEach(fresh => {
+                const existing = allChatData.find(c => c.chatKey === fresh.chatKey);
+                if (!existing || existing.time !== fresh.time || existing.pic !== fresh.pic) needsRender = true;
+            });
+
+            if (needsRender) {
+                allChatData = freshData;
+                
+                // Save to LocalStorage
+                let lsUpdate = {};
+                allChatData.forEach(c => lsUpdate[c.chatKey] = c);
+                setLsChats(lsUpdate);
+
+                // Re-render UI
+                const query = document.getElementById('searchInput').value.toLowerCase();
+                if (query) {
+                    renderChatList(allChatData.filter(c => c.name.toLowerCase().includes(query) || c.text.toLowerCase().includes(query)), true);
+                } else {
+                    renderChatList(allChatData.slice(0, displayedCount + ITEMS_PER_PAGE), true);
+                }
+                checkLoadMore();
+            }
         });
     }
 
-    function renderChatList(chats) {
+    function renderChatList(chats, isFullReplace = false) {
         const chatListDiv = document.getElementById('chatList');
-        chatListDiv.innerHTML = "";
+        if (isFullReplace) chatListDiv.innerHTML = "";
+
+        if (chats.length === 0 && isFullReplace) {
+            chatListDiv.innerHTML = `<p class="p-10 text-center text-gray-400">No messages found</p>`;
+            return;
+        }
+
         chats.forEach(chat => {
+            // Prevent duplicate rendering
+            if (document.getElementById(`chat_${chat.chatKey}`)) return;
+
             const chatEl = document.createElement('div');
             chatEl.id = `chat_${chat.chatKey}`;
             chatEl.className = "chat-item flex items-center p-4 cursor-pointer transition";
@@ -162,11 +244,14 @@
             };
             
             const timeStr = chat.time ? new Date(chat.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "";
+            
+            // Get image from LocalStorage if exists, to prevent reload
+            let imgSrc = getLsImg(chat.uid) || chat.pic;
 
             chatEl.innerHTML = `
                 <div class="checkbox-custom flex-shrink-0"></div>
                 <div class="relative flex-shrink-0">
-                    <img src="${chat.pic || 'https://ui-avatars.com/api/?name=' + chat.name}" class="w-14 h-14 rounded-full object-cover border border-gray-100">
+                    <img src="${imgSrc}" class="w-14 h-14 rounded-full object-cover border border-gray-100" loading="lazy">
                     <div id="status_${chat.uid}" class="hidden"></div>
                 </div>
                 <div class="flex-1 min-w-0 ml-3">
@@ -183,6 +268,25 @@
             chatListDiv.appendChild(chatEl);
             updateStatus(chat.uid);
         });
+
+        if (isFullReplace) displayedCount = chats.length;
+        else displayedCount += chats.length;
+    }
+
+    function loadMoreChats() {
+        const nextChats = allChatData.slice(displayedCount, displayedCount + ITEMS_PER_PAGE);
+        renderChatList(nextChats);
+        checkLoadMore();
+    }
+
+    function checkLoadMore() {
+        const btn = document.getElementById('loadMoreBtn');
+        if (displayedCount < allChatData.length) {
+            btn.style.display = 'block';
+            btn.innerText = `Load More (${allChatData.length - displayedCount} left)`;
+        } else {
+            btn.style.display = 'none';
+        }
     }
 
     function enterSelectionMode(firstKey) {
@@ -220,6 +324,12 @@
             const updates = {};
             selectedChats.forEach(key => updates[`/chats/${key}`] = null);
             await db.ref().update(updates);
+            
+            // Update LocalStorage
+            let lsChats = getLsChats();
+            selectedChats.forEach(key => delete lsChats[key]);
+            setLsChats(lsChats);
+            
             exitSelectionMode();
         }
     }
@@ -244,7 +354,8 @@
         const filtered = allChatData.filter(chat => 
             chat.name.toLowerCase().includes(query) || chat.text.toLowerCase().includes(query)
         );
-        renderChatList(filtered);
+        renderChatList(filtered, true);
+        document.getElementById('loadMoreBtn').style.display = 'none'; // Hide load more during search
     }
 </script>
 </body>
