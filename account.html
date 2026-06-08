@@ -52,7 +52,7 @@
             }
         };
 
-        // Console Detection (পেজ রিলোড হবে কেউ কনসোল খুললে)
+        // Console Detection
         setInterval(function() {
             if (window.outerHeight - window.innerHeight > 200 || window.outerWidth - window.innerWidth > 200) {
                 window.location.reload();
@@ -62,12 +62,12 @@
 </head>
 <body class="bg-gray-100 overflow-hidden">
 
-    <audio id="notifSound" src="https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3" preload="auto"></audio>
+    <audio id="notifSound" src="https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3" preload="none"></audio>
 
     <div id="pushNotification">
         <div class="notif-card flex items-center gap-4 cursor-pointer shadow-xl" onclick="goToChat()">
             <div class="relative">
-                <img id="notifImg" src="" class="w-12 h-12 rounded-full object-cover border-2 border-blue-500">
+                <img id="notifImg" src="" loading="lazy" class="w-12 h-12 rounded-full object-cover border-2 border-blue-500 bg-gray-200">
                 <span class="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full border-2 border-white">New</span>
             </div>
             <div class="flex-1 overflow-hidden">
@@ -90,7 +90,7 @@
                 <p id="userNameDisplay" class="text-[12px] font-bold text-gray-800 leading-none">User</p>
                 <p class="text-[9px] text-blue-500 font-bold uppercase">Trader Account</p>
             </div>
-            <img id="userAvatar" src="" class="h-9 w-9 rounded-full border object-cover">
+            <img id="userAvatar" src="" loading="lazy" class="h-9 w-9 rounded-full border object-cover bg-gray-100">
         </div>
     </nav>
 
@@ -100,7 +100,7 @@
                 <div>
                     <h4 class="text-[10px] font-black text-gray-400 uppercase tracking-widest px-4 mb-2">Main Dashboard</h4>
                     <ul class="space-y-1">
-                        <li><a href="allpost.html" target="contentFrame" class="nav-link flex items-center px-4 py-3 text-sm font-bold text-blue-600 bg-blue-50 rounded-xl"><i class="fas fa-th-large mr-3 w-5"></i> Home Page</a></li>
+                        <li><a href="allposts.html" target="contentFrame" class="nav-link flex items-center px-4 py-3 text-sm font-bold text-blue-600 bg-blue-50 rounded-xl"><i class="fas fa-th-large mr-3 w-5"></i> Home Page</a></li>
                         <li><a href="marketplace.html" target="contentFrame" class="nav-link flex items-center px-4 py-3 text-sm font-bold text-gray-600 hover:bg-gray-50 rounded-xl"><i class="fas fa-shopping-basket mr-3 w-5"></i> Marketplace</a></li>
                     </ul>
                 </div>
@@ -130,7 +130,7 @@
 
         <main class="main-content flex-1 relative overflow-hidden transition-all duration-300">
             <div id="overlay" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm z-30 lg:hidden"></div>
-            <iframe name="contentFrame" id="contentFrame" src="allpost.html" class="content-frame"></iframe>
+            <iframe name="contentFrame" id="contentFrame" src="allposts.html" loading="lazy" class="content-frame"></iframe>
         </main>
     </div>
 
@@ -141,17 +141,45 @@
     const db = firebase.database(), auth = firebase.auth();
     
     let myUid = "";
+    let presenceInterval; 
 
+    // --- 🟢 UPGRADED PRESENCE SYSTEM (PAGE LIFECYCLE BASED) ---
     function managePresence(uid) {
         const statusRef = db.ref(`status/${uid}`);
+        const TIMEOUT = 90000; // 90 seconds timeout for stale data
+        
+        // 1. Firebase Connection State
         db.ref('.info/connected').on('value', snap => {
             if (snap.val() === true) {
-                statusRef.set({ state: 'online', last: Date.now() });
+                // When connected, set online and setup onDisconnect
+                statusRef.set({ state: 'online', last: Date.now(), lastActive: Date.now() });
                 statusRef.onDisconnect().set({ state: 'offline', last: Date.now() });
+                
+                // 2. Heartbeat System (Continuous Ping)
+                // It will ping every 30 seconds as long as the main page is open in the browser
+                clearInterval(presenceInterval);
+                presenceInterval = setInterval(() => {
+                    statusRef.update({ lastActive: Date.now() });
+                }, 30000); 
+            } else {
+                clearInterval(presenceInterval);
+            }
+        });
+
+        // 3. Stale Data Cleaner (Safety Net)
+        // If internet drops suddenly and onDisconnect fails, this forces offline
+        db.ref(`status/${uid}`).on('value', statusSnap => {
+            const data = statusSnap.val();
+            if (data && data.state === 'online') {
+                const timeDiff = Date.now() - (data.lastActive || data.last);
+                if (timeDiff > TIMEOUT) {
+                    statusRef.set({ state: 'offline', last: data.lastActive || data.last });
+                }
             }
         });
     }
 
+    // Logic: Reduced unnecessary database fetching
     function listenNotifications(uid) {
         db.ref('chats').on('child_added', snap => {
             if (snap.key.includes(uid)) {
@@ -168,7 +196,6 @@
                             const uSnap = await db.ref(`user-info/${m.senderId}/profile`).once('value');
                             const user = uSnap.val() || {};
                             
-                            // 🎙️ Voice & 📷 Photo Notification Condition
                             let notificationText = m.text;
                             if (m.type === 'image') {
                                 notificationText = "📷 Sent a photo";
@@ -176,7 +203,10 @@
                                 notificationText = "🎙️ Sent a voice message";
                             }
                             
-                            document.getElementById('notifSound').play().catch(() => {});
+                            const audio = document.getElementById('notifSound');
+                            audio.load();
+                            audio.play().catch(() => {});
+                            
                             showPopup(user.fullName || "New Message", notificationText, user.profilePic, m.senderId);
                         }
                     }
@@ -190,7 +220,7 @@
         activeSenderId = sid;
         document.getElementById('notifName').innerText = name;
         document.getElementById('notifMsg').innerText = msg;
-        document.getElementById('notifImg').src = pic || 'https://ui-avatars.com/api/?name=' + name;
+        document.getElementById('notifImg').src = pic || 'https://ui-avatars.com/api/?name=' + name + '&size=64';
         
         const pop = document.getElementById('pushNotification');
         pop.classList.add('show');
@@ -209,11 +239,11 @@
             myUid = user.uid;
             managePresence(user.uid);
             listenNotifications(user.uid);
-            db.ref('user-info/' + user.uid).on('value', snap => {
-                const data = snap.val();
-                if (data?.profile) {
-                    document.getElementById('userNameDisplay').innerText = data.profile.fullName;
-                    document.getElementById('userAvatar').src = data.profile.profilePic || `https://ui-avatars.com/api/?name=${data.profile.fullName}`;
+            db.ref('user-info/' + user.uid + '/profile').on('value', snap => {
+                const profile = snap.val();
+                if (profile) {
+                    document.getElementById('userNameDisplay').innerText = profile.fullName;
+                    document.getElementById('userAvatar').src = profile.profilePic || `https://ui-avatars.com/api/?name=${profile.fullName}&size=100`;
                 }
             });
         } else { window.location.href = "login.html"; }
@@ -238,10 +268,16 @@
     });
 
     function logout() {
+        clearInterval(presenceInterval);
         db.ref(`status/${myUid}`).set({ state: 'offline', last: Date.now() }).then(() => {
             auth.signOut().then(() => window.location.href = "login.html");
         });
     }
+
+    // When the main page is closed or refreshed, force offline
+    window.addEventListener('beforeunload', () => {
+        db.ref(`status/${myUid}`).set({ state: 'offline', last: Date.now() });
+    });
 </script>
 </body>
 </html>
