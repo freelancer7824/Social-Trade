@@ -29,6 +29,44 @@
         audio { height: 35px; max-width: 200px; border-radius: 20px; }
         .typing-dots::after { content: '...'; animation: dots 1s steps(3, end) infinite; }
         @keyframes dots { 0% { content: ''; } 33% { content: '.'; } 66% { content: '..'; } 100% { content: '...'; } }
+
+        /* Textarea Auto Resize Styles */
+        #msgInput {
+            resize: none;
+            min-height: 40px;
+            max-height: 120px; /* Maximum height before scrolling */
+            line-height: 1.4;
+            overflow-y: auto;
+        }
+
+        /* Custom Context Menu Styles */
+        #contextMenu {
+            position: fixed;
+            background: #fff;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            padding: 4px 0;
+            z-index: 1000;
+            display: none;
+            min-width: 100px;
+            overflow: hidden;
+        }
+        #contextMenu button {
+            width: 100%;
+            text-align: left;
+            padding: 10px 15px;
+            font-size: 14px;
+            color: #333;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        #contextMenu button:hover {
+            background: #f3f4f6;
+        }
     </style>
 </head>
 <body class="max-w-[500px] mx-auto h-screen flex flex-col bg-white">
@@ -47,6 +85,11 @@
 
     <div id="messages" class="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50"></div>
 
+    <!-- Custom Context Menu for Copy -->
+    <div id="contextMenu">
+        <button onclick="copyMessageText()"><i class="far fa-copy text-blue-500"></i> Copy</button>
+    </div>
+
     <div id="voiceStatus" class="hidden px-4 py-3 bg-blue-50 text-blue-600 text-sm flex justify-between items-center border-t animate-pulse">
         <span class="flex items-center gap-2">
             <i class="fas fa-microphone text-red-500"></i> 
@@ -55,7 +98,7 @@
         <button onclick="stopAndCancel()" class="text-red-500 font-bold px-2">Cancel</button>
     </div>
 
-    <div class="p-3 border-t bg-white flex gap-2 items-center">
+    <div class="p-3 border-t bg-white flex gap-2 items-end"> <!-- Changed items-center to items-end -->
         <label class="p-2 cursor-pointer active:scale-90 transition">
             <i class="fas fa-image text-blue-500 text-xl" id="camIcon"></i>
             <div id="uploadSpin" class="upload-loader hidden"></div>
@@ -66,7 +109,8 @@
             <i class="fas fa-microphone text-xl"></i>
         </button>
 
-        <input id="msgInput" type="text" placeholder="Aa" class="flex-1 bg-gray-100 rounded-full px-5 py-2.5 outline-none text-sm border focus:border-blue-300 transition" autocomplete="off" onkeypress="if(event.key==='Enter')sendMsg()" oninput="handleTyping()">
+        <!-- Changed input to textarea for large text -->
+        <textarea id="msgInput" rows="1" placeholder="Aa" class="flex-1 bg-gray-100 rounded-2xl px-4 py-2.5 outline-none text-sm border focus:border-blue-300 transition" autocomplete="off" oninput="autoResize(this); handleTyping()" onkeydown="handleKeyDown(event)"></textarea>
         
         <button onclick="sendMsg()" id="sendBtn" class="text-blue-500 p-2 font-bold active:scale-90 transition">
             <i class="fas fa-paper-plane text-xl"></i>
@@ -143,6 +187,7 @@
         // VOICE VARIABLES
         let mediaRecorder, audioChunks = [], timerInterval, seconds = 0, isRecording = false, shouldUpload = false;
         let typingTimeout; // For typing indicator
+        let copyTargetText = ""; // For copy feature
 
         auth.onAuthStateChanged(user => {
             if (user && receiverId) {
@@ -151,7 +196,7 @@
                 loadHeader();
                 loadMessages();
                 setupTypingListener();
-                markMessagesAsSeen(); // New: Mark messages as seen when chat opens
+                markMessagesAsSeen();
             }
         });
 
@@ -169,7 +214,7 @@
             });
         }
 
-        // --- SMART MESSAGE LOADING (FIXED) ---
+        // --- SMART MESSAGE LOADING ---
         function loadMessages() {
             const container = document.getElementById('messages');
             
@@ -179,7 +224,7 @@
                 renderMessages(localChats);
             }
 
-            // 2. Listen to Firebase using 'value' instead of 'child_added' (Prevents multiple renders)
+            // 2. Listen to Firebase
             db.ref(`chats/${chatKey}`).on('value', async snap => {
                 const firebaseChats = snap.val() || {};
                 
@@ -190,9 +235,9 @@
                     }
                 }
 
-                saveLocalChats(firebaseChats); // Update local storage
-                renderMessages(firebaseChats);  // Render only once per database update
-                markMessagesAsSeen(); // Check if there are unseen messages
+                saveLocalChats(firebaseChats); 
+                renderMessages(firebaseChats);  
+                markMessagesAsSeen(); 
             });
         }
 
@@ -200,7 +245,6 @@
             const container = document.getElementById('messages');
             const sortedMsgs = Object.values(msgs).sort((a, b) => a.timestamp - b.timestamp);
             
-            // Check if user is at the bottom before rendering
             const isAtBottom = container.scrollHeight - container.clientHeight <= container.scrollTop + 50;
             
             container.innerHTML = sortedMsgs.map(m => {
@@ -215,35 +259,89 @@
                 } else if(m.type === 'voice') {
                     content = `<div class="flex items-center bg-white p-1 rounded-full shadow-sm border"><audio controls src="${m.text}"></audio></div>`;
                 } else {
-                    content = `<div class="px-4 py-2.5 rounded-2xl text-[14px] shadow-sm ${isMe ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white text-gray-800 border border-gray-100 rounded-bl-none'}">${m.text}</div>`;
+                    // Added 'whitespace-pre-wrap' so large texts keep line breaks
+                    content = `<div class="px-4 py-2.5 rounded-2xl text-[14px] shadow-sm whitespace-pre-wrap ${isMe ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white text-gray-800 border border-gray-100 rounded-bl-none'}">${m.text}</div>`;
                 }
 
-                // Seen Tick Logic (✓✓)
                 let seenTick = "";
                 if(isMe) {
-                    if(m.seen) {
-                        seenTick = `<span class="text-[10px] text-blue-200 ml-1">✓✓</span>`;
-                    } else {
-                        seenTick = `<span class="text-[10px] text-blue-200 ml-1">✓</span>`;
-                    }
+                    seenTick = m.seen ? `<span class="text-[10px] text-blue-200 ml-1">✓✓</span>` : `<span class="text-[10px] text-blue-200 ml-1">✓</span>`;
                 }
 
-                return `<div class="flex ${isMe ? 'justify-end' : 'justify-start'}"><div class="max-w-[85%] flex flex-col ${isMe ? 'items-end' : 'items-start'}">${content}${isMe ? `<div class="mt-0.5 flex items-center text-gray-400 text-[10px]">${timeAgo(m.timestamp)} ${seenTick}</div>` : ''}</div></div>`;
+                // Added contextmenu event for desktop right-click & touch events for mobile hold
+                return `<div class="flex ${isMe ? 'justify-end' : 'justify-start'}" oncontextmenu="showCopyMenu(event, '${m.type === 'text' ? m.text.replace(/'/g, "\\'") : m.text}')" ontouchstart="startHold(event, '${m.type === 'text' ? m.text.replace(/'/g, "\\'") : m.text}')" ontouchend="endHold()" ontouchmove="endHold()"><div class="max-w-[85%] flex flex-col ${isMe ? 'items-end' : 'items-start'}">${content}${isMe ? `<div class="mt-0.5 flex items-center text-gray-400 text-[10px]">${timeAgo(m.timestamp)} ${seenTick}</div>` : ''}</div></div>`;
             }).join('');
             
-            // Auto-scroll only if user is already at the bottom
             if(isAtBottom) {
                 container.scrollTop = container.scrollHeight;
             }
         }
 
-        // --- NEW: MARK MESSAGES AS SEEN ---
+        // --- COPY FEATURE LOGIC ---
+        let holdTimeout;
+
+        function startHold(e, text) {
+            holdTimeout = setTimeout(() => {
+                copyTargetText = text;
+                const touch = e.touches[0];
+                showMenuAtPosition(touch.clientX, touch.clientY);
+            }, 500); // 500ms hold
+        }
+
+        function endHold() {
+            clearTimeout(holdTimeout);
+        }
+
+        function showCopyMenu(e, text) {
+            e.preventDefault(); // Prevent default browser menu
+            copyTargetText = text;
+            showMenuAtPosition(e.clientX, e.clientY);
+        }
+
+        function showMenuAtPosition(x, y) {
+            const menu = document.getElementById('contextMenu');
+            menu.style.display = 'block';
+            
+            // Adjust position if menu goes off screen
+            const menuWidth = 150;
+            const menuHeight = 45;
+            if (x + menuWidth > window.innerWidth) x = window.innerWidth - menuWidth;
+            if (y + menuHeight > window.innerHeight) y = window.innerHeight - menuHeight;
+
+            menu.style.left = `${x}px`;
+            menu.style.top = `${y}px`;
+        }
+
+        function copyMessageText() {
+            navigator.clipboard.writeText(copyTargetText).then(() => {
+                // Optional: You can show a small "Copied!" toast here if you want
+            }).catch(err => {
+                // Fallback for insecure contexts (HTTP)
+                const textArea = document.createElement("textarea");
+                textArea.value = copyTargetText;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+            });
+            document.getElementById('contextMenu').style.display = 'none';
+        }
+
+        // Close menu if clicked elsewhere
+        document.addEventListener('click', (e) => {
+            const menu = document.getElementById('contextMenu');
+            if (!menu.contains(e.target)) {
+                menu.style.display = 'none';
+            }
+        });
+
+
+        // --- MARK MESSAGES AS SEEN ---
         function markMessagesAsSeen() {
             db.ref(`chats/${chatKey}`).once('value', snap => {
                 const messages = snap.val();
                 const updates = {};
                 for (let key in messages) {
-                    // If message is from receiver and not seen yet
                     if (messages[key].senderId === receiverId && !messages[key].seen) {
                         updates[`${key}/seen`] = true;
                     }
@@ -254,7 +352,7 @@
             });
         }
 
-        // --- NEW: TYPING INDICATOR ---
+        // --- TYPING INDICATOR ---
         function handleTyping() {
             clearTimeout(typingTimeout);
             db.ref(`typing/${chatKey}/${myUid}`).set(true);
@@ -270,7 +368,6 @@
                 if(isTyping) {
                     statusText.innerHTML = `<span class="text-blue-500 typing-dots">Typing</span>`;
                 } else {
-                    // Revert to original status check
                     db.ref(`status/${receiverId}`).once('value', s => {
                         const data = s.val();
                         statusText.innerText = (data && data.state === 'online') ? "Active now" : "Offline";
@@ -279,7 +376,6 @@
             });
         }
 
-        // Time formatter (Basic)
         function timeAgo(timestamp) {
             const seconds = Math.floor((Date.now() - timestamp) / 1000);
             if(seconds < 60) return 'Just now';
@@ -288,6 +384,20 @@
             const hours = Math.floor(minutes / 60);
             if(hours < 24) return hours + 'h ago';
             return new Date(timestamp).toLocaleDateString();
+        }
+
+        // --- TEXTAREA AUTO RESIZE & ENTER KEY LOGIC ---
+        function autoResize(textarea) {
+            textarea.style.height = 'auto';
+            textarea.style.height = textarea.scrollHeight + 'px';
+        }
+
+        function handleKeyDown(event) {
+            // If Enter is pressed without Shift, send the message
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendMsg();
+            }
         }
 
         // VOICE LOGIC
@@ -355,8 +465,8 @@
             
             db.ref(`chats/${chatKey}`).push({ senderId: myUid, text: txt, type: 'text', timestamp: Date.now(), seen: false });
             input.value = "";
+            input.style.height = 'auto'; // Reset height after sending
             
-            // Remove typing status immediately after sending
             db.ref(`typing/${chatKey}/${myUid}`).remove();
         }
 
