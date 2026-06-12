@@ -103,7 +103,7 @@
 
         let currentUser = null;
         let userRatingsCache = {};
-        let liveTimers = []; // Store intervals to clear them later
+        let liveTimers = []; 
 
         auth.onAuthStateChanged(user => { 
             if(user) { 
@@ -317,7 +317,6 @@
             }
         }
 
-        // Helper function to calculate time ago
         function timeAgo(timestamp) {
             const seconds = Math.floor((Date.now() - timestamp) / 1000);
             if(seconds < 60) return `${seconds} sec ago`;
@@ -329,7 +328,6 @@
             return `${days} day ago`;
         }
 
-        // Helper function to calculate remaining time
         function timeRemaining(deadline) {
             const diff = deadline - Date.now();
             if(diff <= 0) return "Expired";
@@ -345,7 +343,6 @@
                 const msgBox = document.getElementById('msgContainer');
                 notifBox.innerHTML = ""; msgBox.innerHTML = "";
                 
-                // Clear previous live timers
                 liveTimers.forEach(timer => clearInterval(timer));
                 liveTimers = [];
 
@@ -377,12 +374,35 @@
                         `;
                         notifBox.appendChild(div);
 
-                        // Update time ago and deadline live
                         const timer1 = setInterval(() => {
                             div.querySelector('.time-ago-text').innerText = timeAgo(o.timestamp);
                             div.querySelector('.deadline-text').innerText = timeRemaining(o.deadline);
                         }, 1000);
                         liveTimers.push(timer1);
+                    }
+
+                    // BUYER VIEW: Paid, waiting for seller to approve
+                    if(o.buyerId === currentUser.uid && o.status === 'pending_seller') {
+                        const div = document.createElement('div');
+                        div.className = "premium-card p-6 border-l-4 border-yellow-500";
+                        div.innerHTML = `
+                            <div class="flex justify-between items-center mb-2">
+                                <p class="text-[8px] font-black uppercase text-yellow-600">Payment Sent - Awaiting Seller</p>
+                                <p class="text-[8px] font-bold text-gray-400 time-ago-text">Just now</p>
+                            </div>
+                            <h3 class="text-sm font-black text-gray-800 uppercase mb-1">${o.title || 'Item'}</h3>
+                            <p class="text-[10px] font-bold text-gray-500 mb-1">Pieces: ${o.pieces || 1}</p>
+                            <p class="text-xs font-black mb-2">Amount Held: ৳${o.amount}</p>
+                            <p class="text-[9px] font-bold text-yellow-500 mb-4 deadline-text">Calculating time...</p>
+                            <div class="text-center text-[9px] text-gray-400 italic">Please wait for the seller to approve...</div>
+                        `;
+                        notifBox.appendChild(div);
+
+                        const timer2 = setInterval(() => {
+                            div.querySelector('.time-ago-text').innerText = timeAgo(o.timestamp);
+                            div.querySelector('.deadline-text').innerText = timeRemaining(o.deadline);
+                        }, 1000);
+                        liveTimers.push(timer2);
                     }
 
                     // BUYER VIEW: Seller approved, waiting for buyer to confirm release or report
@@ -415,24 +435,21 @@
                         `;
                         msgBox.appendChild(div);
 
-                        // Update time ago and deadline live
-                        const timer2 = setInterval(() => {
+                        const timer3 = setInterval(() => {
                             div.querySelector('.time-ago-text').innerText = timeAgo(o.timestamp);
                             div.querySelector('.deadline-text').innerText = timeRemaining(o.deadline);
                         }, 1000);
-                        liveTimers.push(timer2);
+                        liveTimers.push(timer3);
                     }
                 });
             });
         }
 
-        // Seller approves and the secret data is sent to buyer
         async function approveTrade(id) {
             await db.ref(`orders/${id}`).update({ status: 'pending_buyer' });
             Swal.fire('Approved!', 'Secret data sent to buyer.', 'success');
         }
 
-        // Buyer confirms release -> Funds go to Seller
         async function finalComplete(id, amount, sellerId) {
             const { value: rating } = await Swal.fire({
                 title: 'Rate this seller',
@@ -460,30 +477,36 @@
             Swal.fire('Success', 'Trade Finished & Funds Released.', 'success');
         }
 
-        // Buyer reports Seller -> Buyer gets refund, Seller gets blocked
+        // Buyer reports Seller -> Redirects to report page (NO BALANCE RESTORE HERE)
         async function rejectTrade(id) {
-            const snap = await db.ref(`orders/${id}`).get();
-            const o = snap.val();
-            
-            const bSnap = await db.ref(`user-info/${o.buyerId}/balance`).get();
-            await db.ref(`user-info/${o.buyerId}/balance`).set((bSnap.val() || 0) + o.amount);
+            const { isConfirmed } = await Swal.fire({
+                title: 'Report this seller?',
+                text: "You will be redirected to submit a report with evidence. Balance will be reviewed by admin.",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                confirmButtonText: 'Yes, Report!'
+            });
 
-            await db.ref(`user-ratings/${o.sellerId}`).push({ score: 1, released: false, timestamp: Date.now() });
-            await db.ref(`user-info/${o.sellerId}`).update({ isBlocked: true });
-            
-            await db.ref(`orders/${id}`).update({ status: 'rejected' });
-            Swal.fire('Reported', 'Seller Banned & Your Balance Restored.', 'error');
+            if (isConfirmed) {
+                const snap = await db.ref(`orders/${id}`).get();
+                const o = snap.val();
+                // Just redirecting to report page with targetUid, orderId, amount, and buyerId
+                window.location.href = `report.html?targetUid=${o.sellerId}&orderId=${id}&orderAmount=${o.amount}&buyerId=${o.buyerId}`;
+            }
         }
 
         // Auto penalty if time expires
         async function processExpiredTrade(id, o) {
             if(o.status === 'pending_seller') {
+                // Seller didn't respond in time -> Buyer gets refund, Seller blocked
                 const bSnap = await db.ref(`user-info/${o.buyerId}/balance`).get();
                 await db.ref(`user-info/${o.buyerId}/balance`).set((bSnap.val() || 0) + o.amount);
                 await db.ref(`user-info/${o.sellerId}`).update({ isBlocked: true });
                 await db.ref(`orders/${id}`).update({ status: 'expired_seller_blocked' });
             } 
             else if(o.status === 'pending_buyer') {
+                // Buyer didn't respond in time -> Seller gets funds, Buyer blocked
                 const sSnap = await db.ref(`user-info/${o.sellerId}/balance`).get();
                 await db.ref(`user-info/${o.sellerId}/balance`).set((sSnap.val() || 0) + o.amount);
                 await db.ref(`user-info/${o.buyerId}`).update({ isBlocked: true });
