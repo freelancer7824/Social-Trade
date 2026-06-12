@@ -21,9 +21,14 @@
         .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
         .online { background: #22c55e; box-shadow: 0 0 8px #22c55e; }
         .offline { background: #cbd5e1; }
+        .blur-text { filter: blur(5px); user-select: none; transition: filter 0.3s; }
     </style>
 </head>
 <body class="pb-32" oncontextmenu="return false;">
+
+    <button onclick="showCreateModal()" class="fixed bottom-28 right-8 z-40 bg-gray-900 text-white w-14 h-14 rounded-full shadow-2xl flex items-center justify-center text-2xl border-4 border-white hover:bg-black transition-all">
+        <i class="fas fa-plus"></i>
+    </button>
 
     <header class="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100 px-6 py-5 flex justify-between items-center">
         <div>
@@ -32,7 +37,7 @@
         </div>
         <div class="text-right">
             <p id="onlineStatusText" class="text-[8px] font-black uppercase text-gray-400">Connecting...</p>
-            <div id="statusDot" class="status-dot offline"></div>
+            <div id="statusDot" class="status-dot offline float-right ml-2 mt-1"></div>
         </div>
     </header>
 
@@ -42,15 +47,30 @@
         </section>
 
         <section id="notifTab" class="tab-content space-y-4">
-            <h2 class="text-[10px] font-black text-rose-500 uppercase tracking-widest px-2 italic">Trade Actions</h2>
+            <h2 class="text-[10px] font-black text-rose-500 uppercase tracking-widest px-2 italic">Pending Actions</h2>
             <div id="notifContainer" class="space-y-4"></div>
         </section>
 
         <section id="msgTab" class="tab-content space-y-4">
-            <h2 class="text-[10px] font-black text-blue-600 uppercase tracking-widest px-2 italic">Inbox</h2>
+            <h2 class="text-[10px] font-black text-blue-600 uppercase tracking-widest px-2 italic">Active Trades</h2>
             <div id="msgContainer" class="space-y-4"></div>
         </section>
     </main>
+
+    <div id="createModal" class="fixed inset-0 bg-black/60 z-50 hidden items-center justify-center p-6 backdrop-blur-sm">
+        <div class="bg-white w-full max-w-md rounded-3xl p-8 space-y-4">
+            <h2 class="text-lg font-black uppercase">Create Listing</h2>
+            <input id="postTitle" type="text" placeholder="Item Title (e.g. UC, Diamond)" class="w-full p-4 bg-gray-50 rounded-xl text-sm font-bold border border-gray-100 focus:outline-none focus:ring-2 focus:ring-black">
+            <input id="postPrice" type="number" placeholder="Price (৳)" class="w-full p-4 bg-gray-50 rounded-xl text-sm font-bold border border-gray-100 focus:outline-none focus:ring-2 focus:ring-black">
+            <input id="postLimit" type="number" placeholder="Time Limit (Hours)" class="w-full p-4 bg-gray-50 rounded-xl text-sm font-bold border border-gray-100 focus:outline-none focus:ring-2 focus:ring-black">
+            <div class="relative">
+                <textarea id="postSecretDesc" rows="3" placeholder="Secret Data / Description (Only buyer will see after payment)" class="w-full p-4 bg-red-50 rounded-xl text-xs font-bold border border-red-100 focus:outline-none focus:ring-2 focus:ring-rose-500"></textarea>
+                <i class="fas fa-lock absolute top-4 right-4 text-rose-300"></i>
+            </div>
+            <button onclick="createListing()" class="w-full bg-gray-900 text-white py-4 rounded-2xl font-black text-[10px] uppercase shadow-xl">Submit Listing</button>
+            <button onclick="document.getElementById('createModal').style.display='none'" class="w-full bg-gray-100 text-gray-500 py-3 rounded-xl font-bold text-xs">Cancel</button>
+        </div>
+    </div>
 
     <nav class="fixed bottom-6 left-6 right-6 bg-white border border-gray-100 rounded-[2.5rem] p-2 flex justify-between items-center z-50 shadow-2xl">
         <button onclick="changeTab('market', this)" class="nav-btn nav-active flex-1 py-3 text-gray-400 flex flex-col items-center gap-1">
@@ -60,12 +80,11 @@
             <i class="fas fa-bolt text-lg"></i><span class="text-[8px] font-black uppercase">Pending</span>
         </button>
         <button onclick="changeTab('msg', this)" class="nav-btn flex-1 py-3 text-gray-400 flex flex-col items-center gap-1">
-            <i class="fas fa-comment-alt text-lg"></i><span class="text-[8px] font-black uppercase">Inbox</span>
+            <i class="fas fa-comment-alt text-lg"></i><span class="text-[8px] font-black uppercase">Trades</span>
         </button>
     </nav>
 
     <script>
-        // --- 1. Anti-Inspect Logic ---
         document.onkeydown = (e) => {
             if (e.ctrlKey && (e.keyCode === 85 || e.keyCode === 73 || e.keyCode === 74)) return false;
             if (e.keyCode === 123) return false;
@@ -82,6 +101,7 @@
         const auth = firebase.auth();
 
         let currentUser = null;
+        let userRatingsCache = {};
 
         auth.onAuthStateChanged(user => { 
             if(user) { 
@@ -93,23 +113,16 @@
             }
         });
 
-        // --- 2. Presence Logic (3-minute buffer) ---
         function updatePresence() {
             const userRef = db.ref(`user-info/${currentUser.uid}`);
             userRef.update({ lastActive: Date.now() });
-            
-            setInterval(() => {
-                userRef.update({ lastActive: Date.now() });
-            }, 30000);
+            setInterval(() => { userRef.update({ lastActive: Date.now() }); }, 30000);
 
-            // Real-time status sync
             db.ref(`user-info/${currentUser.uid}/lastActive`).on('value', s => {
                 const diff = Date.now() - s.val();
-                const isOnline = diff < (3 * 60000); // 3 Minutes
-                const dot = document.getElementById('statusDot');
-                const txt = document.getElementById('onlineStatusText');
-                dot.className = `status-dot ${isOnline ? 'online' : 'offline'}`;
-                txt.innerText = isOnline ? 'Active Now' : 'Offline';
+                const isOnline = diff < (3 * 60000); 
+                document.getElementById('statusDot').className = `status-dot ${isOnline ? 'online' : 'offline'}`;
+                document.getElementById('onlineStatusText').innerText = isOnline ? 'Active Now' : 'Offline';
             });
         }
 
@@ -123,8 +136,57 @@
                 }
                 document.getElementById('userBalance').innerText = (data.balance || 0).toFixed(2);
             });
+            preloadRatings();
             loadMarket();
             loadOrders();
+        }
+
+        async function preloadRatings() {
+            db.ref('user-ratings').on('value', snap => {
+                userRatingsCache = snap.val() || {};
+                loadMarket(); 
+            });
+        }
+
+        function getUserRatingStats(uid) {
+            if (!userRatingsCache[uid]) return { avg: 0, total: 0, release: 100 };
+            const ratings = Object.values(userRatingsCache[uid]);
+            const total = ratings.length;
+            const sum = ratings.reduce((a, b) => a + b.score, 0);
+            const released = ratings.filter(r => r.released === true).length;
+            return {
+                avg: total > 0 ? (sum / total).toFixed(1) : 0,
+                total: total,
+                release: total > 0 ? Math.round((released / total) * 100) : 100
+            };
+        }
+
+        function showCreateModal() { document.getElementById('createModal').style.display = 'flex'; }
+
+        async function createListing() {
+            const title = document.getElementById('postTitle').value.trim();
+            const price = parseFloat(document.getElementById('postPrice').value);
+            const limit = parseInt(document.getElementById('postLimit').value);
+            const secretDesc = document.getElementById('postSecretDesc').value.trim();
+
+            if(!title || !price || !limit || !secretDesc) return Swal.fire('Error', 'All fields including Secret Description are required!', 'warning');
+
+            await db.ref('market-items').push({
+                title: title,
+                totalPrice: price,
+                reportTime: limit,
+                secretDescription: secretDesc,
+                publisherId: currentUser.uid,
+                publisherType: 'Seller',
+                timestamp: Date.now()
+            });
+
+            document.getElementById('createModal').style.display = 'none';
+            document.getElementById('postTitle').value = '';
+            document.getElementById('postPrice').value = '';
+            document.getElementById('postLimit').value = '';
+            document.getElementById('postSecretDesc').value = '';
+            Swal.fire('Success', 'Listing Created!', 'success');
         }
 
         function loadMarket() {
@@ -137,34 +199,45 @@
                 Object.keys(data).reverse().forEach(id => {
                     const gig = data[id];
                     const isOwn = gig.publisherId === currentUser.uid;
-                    let itemsHtml = "";
-                    
-                    if(!gig.items) return;
+                    const stats = getUserRatingStats(gig.publisherId);
 
-                    Object.keys(gig.items).forEach(pName => {
-                        const item = gig.items[pName];
-                        itemsHtml += `
-                            <div class="flex items-center justify-between p-4 bg-gray-50 rounded-2xl mb-2 border border-gray-100">
-                                <div class="flex items-center gap-3">
-                                    ${!isOwn ? `<input type="checkbox" name="order-${id}" value="${pName}" data-price="${item.totalPrice}" data-time="${item.reportTime}" data-qty="${item.quantity}" class="w-4 h-4 accent-blue-600">` : ''}
-                                    <div>
-                                        <p class="text-[10px] font-black uppercase">${pName}</p>
-                                        <p class="text-[8px] font-bold text-gray-400">${item.quantity} Pis • ${item.reportTime}h Limit</p>
-                                    </div>
-                                </div>
-                                <p class="text-xs font-black text-blue-600">৳${item.totalPrice}</p>
-                            </div>`;
-                    });
+                    let starsHtml = '';
+                    for(let i=1; i<=5; i++) {
+                        starsHtml += `<i class="fas fa-star text-[8px] ${i <= Math.round(stats.avg) ? 'text-yellow-400' : 'text-gray-200'}"></i>`;
+                    }
 
                     container.innerHTML += `
                         <div class="premium-card p-6 mb-6">
                             <div class="flex justify-between items-center mb-4">
                                 <span class="text-[8px] font-black ${isOwn ? 'bg-black text-white' : 'bg-blue-50 text-blue-600'} px-3 py-1 rounded-full uppercase italic">${isOwn ? 'My Listing' : gig.publisherType}</span>
+                                ${!isOwn ? `
+                                <div class="flex items-center gap-2 text-[9px] font-bold text-gray-500">
+                                    ${starsHtml} <span class="text-black">(${stats.total})</span>
+                                    <span class="bg-green-100 text-green-600 px-2 py-0.5 rounded-full text-[8px]">${stats.release}%</span>
+                                </div>` : ''}
                             </div>
-                            <h3 class="text-sm font-black text-gray-800 mb-5 uppercase italic">${gig.title}</h3>
-                            ${itemsHtml}
+                            <h3 class="text-sm font-black text-gray-800 mb-2 uppercase italic">${gig.title}</h3>
+                            
+                            ${!isOwn ? `
+                            <div class="bg-gray-50 p-3 rounded-xl mb-4 border border-gray-100 relative overflow-hidden">
+                                <p class="text-[9px] font-black text-gray-400 uppercase mb-1"><i class="fas fa-lock mr-1"></i> Secret Data</p>
+                                <p class="text-xs font-bold text-gray-800 blur-text">This is hidden secret description only visible after payment.</p>
+                            </div>` : `
+                            <div class="bg-red-50 p-3 rounded-xl mb-4 border border-red-100">
+                                <p class="text-[9px] font-black text-rose-400 uppercase mb-1"><i class="fas fa-lock mr-1"></i> Your Secret Data</p>
+                                <p class="text-xs font-bold text-rose-600">${gig.secretDescription}</p>
+                            </div>`}
+
+                            <div class="flex items-center justify-between p-4 bg-blue-50 rounded-2xl mb-2 border border-blue-100">
+                                <div>
+                                    <p class="text-[10px] font-black uppercase text-blue-800">Price</p>
+                                    <p class="text-[8px] font-bold text-blue-400">${gig.reportTime}h Limit</p>
+                                </div>
+                                <p class="text-sm font-black text-blue-600">৳${gig.totalPrice}</p>
+                            </div>
+                            
                             ${isOwn ? `<button onclick="deletePost('${id}')" class="w-full mt-4 bg-rose-50 text-rose-500 py-3 rounded-xl font-black text-[9px] uppercase border border-rose-100">Delete Listing</button>` 
-                                    : `<button onclick="startTrade('${id}', '${gig.publisherId}', '${gig.publisherType}')" class="w-full mt-4 bg-gray-900 text-white py-4 rounded-2xl font-black text-[10px] uppercase shadow-xl">Confirm Selection</button>`}
+                                    : `<button onclick="startTrade('${id}', this)" class="w-full mt-4 bg-gray-900 text-white py-4 rounded-2xl font-black text-[10px] uppercase shadow-xl">Confirm & Pay ৳${gig.totalPrice}</button>`}
                         </div>`;
                 });
             });
@@ -174,58 +247,60 @@
             if(confirm("Delete this listing?")) await db.ref(`market-items/${id}`).remove();
         }
 
-        async function startTrade(gigId, ownerId, postType) {
-            const selected = document.querySelectorAll(`input[name="order-${gigId}"]:checked`);
-            if(selected.length === 0) return Swal.fire('Error', 'Select an item.', 'warning');
-
-            let total = 0; let maxLimit = 0; let details = [];
-            selected.forEach(s => {
-                total += parseFloat(s.dataset.price);
-                maxLimit = Math.max(maxLimit, parseInt(s.dataset.time));
-                details.push({ name: s.value, qty: s.dataset.qty, price: s.dataset.price, limit: s.dataset.time });
-            });
+        async function startTrade(gigId, btn) {
+            btn.disabled = true; btn.innerText = "PROCESSING...";
+            
+            const gigSnap = await db.ref(`market-items/${gigId}`).get();
+            if(!gigSnap.exists()) return Swal.fire('Error', 'Item no longer exists.', 'error');
+            
+            const gig = gigSnap.val();
+            const totalPrice = gig.totalPrice;
+            const timeLimit = gig.reportTime;
+            const ownerId = gig.publisherId;
 
             const myBalSnap = await db.ref(`user-info/${currentUser.uid}/balance`).get();
             const myBal = myBalSnap.val() || 0;
 
-            if(postType === 'Seller' && myBal < total) return Swal.fire('Low Balance', `৳${total} needed.`, 'error');
+            if(myBal < totalPrice) {
+                btn.disabled = false; btn.innerText = `Confirm & Pay ৳${totalPrice}`;
+                return Swal.fire('Low Balance', `৳${totalPrice} needed.`, 'error');
+            }
 
             const { isConfirmed } = await Swal.fire({
-                title: 'Start Trade?',
-                html: `<div class="text-[10px] text-left uppercase">Selected: ${details.map(d => d.name).join(', ')}<br>Total: ৳${total}</div>`,
+                title: 'Confirm Purchase?',
+                html: `<div class="text-[11px] text-left uppercase font-bold">Item: ${gig.title}<br>Amount: ৳${totalPrice}<br>Time Limit: ${timeLimit} Hours<br><br><span class="text-rose-500">৳${totalPrice} will be held in escrow until you release it.</span></div>`,
                 showCancelButton: true
             });
 
-            if(!isConfirmed) return;
-
-            let initialMsg = "";
-            if(postType === 'Buyer') {
-                const { value } = await Swal.fire({ title: 'Enter Proof/Data', input: 'textarea' });
-                if(!value) return;
-                initialMsg = value;
-            } else {
-                // Hold balance for Buyer buying from Seller
-                await db.ref(`user-info/${currentUser.uid}/balance`).set(myBal - total);
+            if(!isConfirmed) {
+                btn.disabled = false; btn.innerText = `Confirm & Pay ৳${totalPrice}`;
+                return;
             }
 
-            // Remove only selected items from market
-            for(let d of details) {
-                await db.ref(`market-items/${gigId}/items/${d.name}`).remove();
+            try {
+                // Deduct balance
+                await db.ref(`user-info/${currentUser.uid}/balance`).set(myBal - totalPrice);
+                
+                // Remove post from market
+                await db.ref(`market-items/${gigId}`).remove();
+
+                // Create order with ALL post data to prevent 'undefined'
+                await db.ref('orders').push({
+                    buyerId: currentUser.uid,
+                    sellerId: ownerId,
+                    amount: totalPrice,
+                    title: gig.title,
+                    secretDescription: gig.secretDescription, // Saved securely
+                    deadline: Date.now() + (timeLimit * 3600000),
+                    status: 'pending_seller', // Waiting for seller action
+                    timestamp: Date.now()
+                });
+
+                Swal.fire('Trade Active', 'Check Pending Tab.', 'success');
+            } catch(e) {
+                Swal.fire('Error', e.message, 'error');
+                btn.disabled = false; btn.innerText = `Confirm & Pay ৳${totalPrice}`;
             }
-
-            await db.ref('orders').push({
-                buyerId: currentUser.uid,
-                sellerId: ownerId,
-                amount: total,
-                type: postType,
-                deadline: Date.now() + (maxLimit * 3600000),
-                itemDetails: details,
-                initialMsg: initialMsg,
-                status: 'pending',
-                timestamp: Date.now()
-            });
-
-            Swal.fire('Trade Active', 'Check Pending Tab.', 'success');
         }
 
         function loadOrders() {
@@ -238,41 +313,42 @@
 
                 Object.keys(val).forEach(id => {
                     const o = val[id];
-                    if(['completed', 'rejected', 'expired'].includes(o.status)) return;
-
-                    // Penalty Logic
-                    if(Date.now() > o.deadline) {
-                        const guilty = (o.status === 'pending') ? o.sellerId : o.buyerId;
-                        db.ref(`user-info/${guilty}`).update({ isBlocked: true });
-                        db.ref(`orders/${id}`).update({ status: 'expired' });
+                    
+                    // Auto-penalize logic if time expires and no action taken
+                    if(Date.now() > o.deadline && (o.status === 'pending_seller' || o.status === 'pending_buyer')) {
+                        processExpiredTrade(id, o); 
                         return;
                     }
 
-                    const itemText = o.itemDetails.map(d => `${d.qty}x ${d.name} (৳${d.price})`).join('<br>');
-
-                    // Pending Actions
-                    if(o.sellerId === currentUser.uid && o.status === 'pending') {
+                    // SELLER VIEW: A buyer paid, waiting for seller to send info
+                    if(o.sellerId === currentUser.uid && o.status === 'pending_seller') {
                         notifBox.innerHTML += `
                             <div class="premium-card p-6 border-l-4 border-rose-500">
-                                <p class="text-[8px] font-black uppercase text-rose-500 mb-2">New Order</p>
-                                <div class="text-[10px] font-bold text-gray-800 mb-4">${itemText}</div>
-                                <p class="text-xs font-black mb-4">Total: ৳${o.amount}</p>
-                                ${o.initialMsg ? `<div class='bg-gray-50 p-2 rounded text-[10px] mb-3'>User Input: ${o.initialMsg}</div>` : ''}
-                                <div class="flex gap-2">
-                                    <button onclick="approveRequest('${id}', '${o.type}', ${o.amount})" class="flex-1 bg-black text-white py-3 rounded-xl text-[9px] font-black">APPROVE</button>
-                                    <button onclick="rejectTrade('${id}')" class="flex-1 bg-red-50 text-red-500 py-3 rounded-xl text-[9px] font-black">REPORT</button>
-                                </div>
+                                <p class="text-[8px] font-black uppercase text-rose-500 mb-2">New Escrow Received</p>
+                                <h3 class="text-sm font-black text-gray-800 uppercase mb-1">${o.title || 'Item'}</h3>
+                                <p class="text-xs font-black mb-4">Amount Held: ৳${o.amount}</p>
+                                <button onclick="approveTrade('${id}')" class="w-full bg-black text-white py-3 rounded-xl text-[9px] font-black">APPROVE & REVEAL DATA</button>
                             </div>`;
                     }
 
-                    // Message Inbox
-                    if(o.buyerId === currentUser.uid && o.status === 'approved_by_owner') {
+                    // BUYER VIEW: Seller approved, waiting for buyer to confirm release or report
+                    if(o.buyerId === currentUser.uid && o.status === 'pending_buyer') {
                         msgBox.innerHTML += `
-                            <div class="premium-card p-6 bg-blue-50/20">
-                                <p class="text-[8px] font-black text-blue-600 uppercase mb-2">Details for: ${o.itemDetails.map(d=>d.name).join(', ')}</p>
-                                <div class="bg-white p-4 rounded-xl text-[11px] mb-5 border">${o.sellerMsg}</div>
+                            <div class="premium-card p-6 bg-blue-50/30 border-l-4 border-blue-500">
+                                <div class="flex justify-between items-center mb-2">
+                                    <p class="text-[8px] font-black text-blue-600 uppercase">Seller Released Info</p>
+                                    <p class="text-xs font-black text-blue-600">৳${o.amount}</p>
+                                </div>
+                                <h3 class="text-sm font-black text-gray-800 uppercase mb-2">${o.title || 'Item'}</h3>
+                                
+                                <!-- Revealed Secret Data -->
+                                <div class="bg-white p-4 rounded-xl text-[11px] mb-5 border shadow-sm">
+                                    <p class="text-[9px] font-black text-gray-400 uppercase mb-2"><i class="fas fa-unlock mr-1"></i> Secret Description</p>
+                                    <p class="font-bold text-gray-800">${o.secretDescription || 'No data provided.'}</p>
+                                </div>
+
                                 <div class="flex gap-2">
-                                    <button onclick="finalComplete('${id}', ${o.amount}, '${o.sellerId}', '${o.type}')" class="flex-1 bg-blue-600 text-white py-4 rounded-2xl text-[9px] font-black">RELEASE ৳${o.amount}</button>
+                                    <button onclick="finalComplete('${id}', ${o.amount}, '${o.sellerId}')" class="flex-1 bg-blue-600 text-white py-4 rounded-2xl text-[9px] font-black">CONFIRM RELEASE</button>
                                     <button onclick="rejectTrade('${id}')" class="flex-1 bg-rose-50 text-rose-600 py-4 rounded-2xl text-[9px] font-black">REPORT</button>
                                 </div>
                             </div>`;
@@ -281,51 +357,71 @@
             });
         }
 
-        async function approveRequest(id, type, amount) {
-            if(type === 'Seller') {
-                const { value: text } = await Swal.fire({ title: 'Enter Data/Proof', input: 'textarea' });
-                if(text) await db.ref(`orders/${id}`).update({ status: 'approved_by_owner', sellerMsg: text });
-            } else {
-                const myBalSnap = await db.ref(`user-info/${currentUser.uid}/balance`).get();
-                const bal = myBalSnap.val() || 0;
-                if(bal < amount) return Swal.fire('Error', 'Low balance to approve.', 'error');
-                await db.ref(`user-info/${currentUser.uid}/balance`).set(bal - amount);
-                await db.ref(`orders/${id}`).update({ status: 'approved_by_owner', sellerMsg: "Funds Secured. Delivery verified." });
-            }
+        // Seller approves and the secret data is sent to buyer
+        async function approveTrade(id) {
+            await db.ref(`orders/${id}`).update({ status: 'pending_buyer' });
+            Swal.fire('Approved!', 'Secret data sent to buyer.', 'success');
         }
 
-        async function finalComplete(id, amount, sellerId, type) {
-            const myBalSnap = await db.ref(`user-info/${currentUser.uid}/balance`).get();
+        // Buyer confirms release -> Funds go to Seller
+        async function finalComplete(id, amount, sellerId) {
+            const { value: rating } = await Swal.fire({
+                title: 'Rate this seller',
+                html: `<div class="flex justify-center gap-2" id="swal-stars">
+                    <i class="fas fa-star text-3xl text-yellow-400 cursor-pointer" data-score="1"></i>
+                    <i class="fas fa-star text-3xl text-yellow-400 cursor-pointer" data-score="2"></i>
+                    <i class="fas fa-star text-3xl text-yellow-400 cursor-pointer" data-score="3"></i>
+                    <i class="fas fa-star text-3xl text-yellow-400 cursor-pointer" data-score="4"></i>
+                    <i class="fas fa-star text-3xl text-yellow-400 cursor-pointer" data-score="5"></i>
+                </div>`,
+                showCancelButton: true,
+                preConfirm: () => {
+                    const activeStar = document.querySelector('#swal-stars .text-yellow-500');
+                    return activeStar ? parseInt(activeStar.dataset.score) : 5;
+                }
+            });
+
+            const score = rating || 5;
+
             const selBalSnap = await db.ref(`user-info/${sellerId}/balance`).get();
+            await db.ref(`user-info/${sellerId}/balance`).set((selBalSnap.val() || 0) + amount);
             
-            if(type === 'Seller') {
-                await db.ref(`user-info/${sellerId}/balance`).set((selBalSnap.val() || 0) + amount);
-            } else {
-                await db.ref(`user-info/${currentUser.uid}/balance`).set((myBalSnap.val() || 0) + amount);
-            }
+            await db.ref(`user-ratings/${sellerId}`).push({ score: score, released: true, timestamp: Date.now() });
             await db.ref(`orders/${id}`).update({ status: 'completed' });
-            Swal.fire('Success', 'Trade Finished.', 'success');
+            Swal.fire('Success', 'Trade Finished & Funds Released.', 'success');
         }
 
+        // Buyer reports Seller -> Buyer gets refund, Seller gets blocked
         async function rejectTrade(id) {
             const snap = await db.ref(`orders/${id}`).get();
             const o = snap.val();
-            const target = (currentUser.uid === o.sellerId) ? o.buyerId : o.sellerId;
             
-            // Refund/Payment logic on report
-            if(o.type === 'Seller') {
-                // If it's a seller post, buyer already paid. Refund to buyer.
+            const bSnap = await db.ref(`user-info/${o.buyerId}/balance`).get();
+            await db.ref(`user-info/${o.buyerId}/balance`).set((bSnap.val() || 0) + o.amount);
+
+            await db.ref(`user-ratings/${o.sellerId}`).push({ score: 1, released: false, timestamp: Date.now() });
+            await db.ref(`user-info/${o.sellerId}`).update({ isBlocked: true });
+            
+            await db.ref(`orders/${id}`).update({ status: 'rejected' });
+            Swal.fire('Reported', 'Seller Banned & Your Balance Restored.', 'error');
+        }
+
+        // Auto penalty if time expires
+        async function processExpiredTrade(id, o) {
+            if(o.status === 'pending_seller') {
+                // Seller didn't respond -> Refund buyer, block seller
                 const bSnap = await db.ref(`user-info/${o.buyerId}/balance`).get();
                 await db.ref(`user-info/${o.buyerId}/balance`).set((bSnap.val() || 0) + o.amount);
-            } else {
-                // If it's a buyer post, seller (owner) paid. Refund to seller.
+                await db.ref(`user-info/${o.sellerId}`).update({ isBlocked: true });
+                await db.ref(`orders/${id}`).update({ status: 'expired_seller_blocked' });
+            } 
+            else if(o.status === 'pending_buyer') {
+                // Buyer didn't confirm release -> Give money to seller, block buyer
                 const sSnap = await db.ref(`user-info/${o.sellerId}/balance`).get();
                 await db.ref(`user-info/${o.sellerId}/balance`).set((sSnap.val() || 0) + o.amount);
+                await db.ref(`user-info/${o.buyerId}`).update({ isBlocked: true });
+                await db.ref(`orders/${id}`).update({ status: 'expired_buyer_blocked' });
             }
-
-            await db.ref(`user-info/${target}`).update({ isBlocked: true });
-            await db.ref(`orders/${id}`).update({ status: 'rejected' });
-            Swal.fire('Reported', 'User banned & Balance Restored.', 'error');
         }
 
         function changeTab(tab, btn) {
@@ -334,6 +430,17 @@
             document.getElementById(tab + 'Tab').classList.add('active');
             btn.classList.add('nav-active');
         }
+
+        document.addEventListener('click', function(e) {
+            if(e.target.closest('#swal-stars i')) {
+                const stars = e.target.closest('#swal-stars').querySelectorAll('i');
+                const score = e.target.dataset.score;
+                stars.forEach(s => {
+                    s.classList.toggle('text-yellow-500', parseInt(s.dataset.score) <= score);
+                    s.classList.toggle('text-yellow-400', parseInt(s.dataset.score) > score);
+                });
+            }
+        });
     </script>
 </body>
 </html>
