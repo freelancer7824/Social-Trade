@@ -61,7 +61,8 @@
         <div class="bg-white w-full max-w-md rounded-3xl p-8 space-y-4">
             <h2 class="text-lg font-black uppercase">Create Listing</h2>
             <input id="postTitle" type="text" placeholder="Item Title (e.g. UC, Diamond)" class="w-full p-4 bg-gray-50 rounded-xl text-sm font-bold border border-gray-100 focus:outline-none focus:ring-2 focus:ring-black">
-            <input id="postPrice" type="number" placeholder="Price (৳)" class="w-full p-4 bg-gray-50 rounded-xl text-sm font-bold border border-gray-100 focus:outline-none focus:ring-2 focus:ring-black">
+            <input id="postPrice" type="number" placeholder="Price per Piece (৳)" class="w-full p-4 bg-gray-50 rounded-xl text-sm font-bold border border-gray-100 focus:outline-none focus:ring-2 focus:ring-black">
+            <input id="postPieces" type="number" placeholder="How many pieces to sell?" class="w-full p-4 bg-gray-50 rounded-xl text-sm font-bold border border-gray-100 focus:outline-none focus:ring-2 focus:ring-black">
             <input id="postLimit" type="number" placeholder="Time Limit (Hours)" class="w-full p-4 bg-gray-50 rounded-xl text-sm font-bold border border-gray-100 focus:outline-none focus:ring-2 focus:ring-black">
             <div class="relative">
                 <textarea id="postSecretDesc" rows="3" placeholder="Secret Data / Description (Only buyer will see after payment)" class="w-full p-4 bg-red-50 rounded-xl text-xs font-bold border border-red-100 focus:outline-none focus:ring-2 focus:ring-rose-500"></textarea>
@@ -102,6 +103,7 @@
 
         let currentUser = null;
         let userRatingsCache = {};
+        let liveTimers = []; // Store intervals to clear them later
 
         auth.onAuthStateChanged(user => { 
             if(user) { 
@@ -166,14 +168,17 @@
         async function createListing() {
             const title = document.getElementById('postTitle').value.trim();
             const price = parseFloat(document.getElementById('postPrice').value);
+            const pieces = parseInt(document.getElementById('postPieces').value);
             const limit = parseInt(document.getElementById('postLimit').value);
             const secretDesc = document.getElementById('postSecretDesc').value.trim();
 
-            if(!title || !price || !limit || !secretDesc) return Swal.fire('Error', 'All fields including Secret Description are required!', 'warning');
+            if(!title || !price || !pieces || !limit || !secretDesc) return Swal.fire('Error', 'All fields are required!', 'warning');
 
             await db.ref('market-items').push({
                 title: title,
-                totalPrice: price,
+                pricePerPiece: price,
+                pieces: pieces,
+                totalPrice: price * pieces,
                 reportTime: limit,
                 secretDescription: secretDesc,
                 publisherId: currentUser.uid,
@@ -184,6 +189,7 @@
             document.getElementById('createModal').style.display = 'none';
             document.getElementById('postTitle').value = '';
             document.getElementById('postPrice').value = '';
+            document.getElementById('postPieces').value = '';
             document.getElementById('postLimit').value = '';
             document.getElementById('postSecretDesc').value = '';
             Swal.fire('Success', 'Listing Created!', 'success');
@@ -218,6 +224,17 @@
                             </div>
                             <h3 class="text-sm font-black text-gray-800 mb-2 uppercase italic">${gig.title}</h3>
                             
+                            <div class="flex items-center gap-3 mb-4 bg-gray-50 p-2 rounded-lg text-center border border-gray-100">
+                                <div class="flex-1">
+                                    <p class="text-[8px] font-black text-gray-400 uppercase">Pieces</p>
+                                    <p class="text-sm font-black text-gray-800">${gig.pieces || 1}</p>
+                                </div>
+                                <div class="flex-1 border-l border-gray-200">
+                                    <p class="text-[8px] font-black text-gray-400 uppercase">Per Piece</p>
+                                    <p class="text-sm font-black text-gray-800">৳${gig.pricePerPiece || gig.totalPrice}</p>
+                                </div>
+                            </div>
+
                             ${!isOwn ? `
                             <div class="bg-gray-50 p-3 rounded-xl mb-4 border border-gray-100 relative overflow-hidden">
                                 <p class="text-[9px] font-black text-gray-400 uppercase mb-1"><i class="fas fa-lock mr-1"></i> Secret Data</p>
@@ -230,7 +247,7 @@
 
                             <div class="flex items-center justify-between p-4 bg-blue-50 rounded-2xl mb-2 border border-blue-100">
                                 <div>
-                                    <p class="text-[10px] font-black uppercase text-blue-800">Price</p>
+                                    <p class="text-[10px] font-black uppercase text-blue-800">Total Price</p>
                                     <p class="text-[8px] font-bold text-blue-400">${gig.reportTime}h Limit</p>
                                 </div>
                                 <p class="text-sm font-black text-blue-600">৳${gig.totalPrice}</p>
@@ -268,7 +285,7 @@
 
             const { isConfirmed } = await Swal.fire({
                 title: 'Confirm Purchase?',
-                html: `<div class="text-[11px] text-left uppercase font-bold">Item: ${gig.title}<br>Amount: ৳${totalPrice}<br>Time Limit: ${timeLimit} Hours<br><br><span class="text-rose-500">৳${totalPrice} will be held in escrow until you release it.</span></div>`,
+                html: `<div class="text-[11px] text-left uppercase font-bold">Item: ${gig.title}<br>Pieces: ${gig.pieces || 1}<br>Total Amount: ৳${totalPrice}<br>Time Limit: ${timeLimit} Hours<br><br><span class="text-rose-500">৳${totalPrice} will be held in escrow until you release it.</span></div>`,
                 showCancelButton: true
             });
 
@@ -278,21 +295,18 @@
             }
 
             try {
-                // Deduct balance
                 await db.ref(`user-info/${currentUser.uid}/balance`).set(myBal - totalPrice);
-                
-                // Remove post from market
                 await db.ref(`market-items/${gigId}`).remove();
 
-                // Create order with ALL post data to prevent 'undefined'
                 await db.ref('orders').push({
                     buyerId: currentUser.uid,
                     sellerId: ownerId,
                     amount: totalPrice,
+                    pieces: gig.pieces || 1,
                     title: gig.title,
-                    secretDescription: gig.secretDescription, // Saved securely
+                    secretDescription: gig.secretDescription,
                     deadline: Date.now() + (timeLimit * 3600000),
-                    status: 'pending_seller', // Waiting for seller action
+                    status: 'pending_seller',
                     timestamp: Date.now()
                 });
 
@@ -303,18 +317,44 @@
             }
         }
 
+        // Helper function to calculate time ago
+        function timeAgo(timestamp) {
+            const seconds = Math.floor((Date.now() - timestamp) / 1000);
+            if(seconds < 60) return `${seconds} sec ago`;
+            const minutes = Math.floor(seconds / 60);
+            if(minutes < 60) return `${minutes} min ago`;
+            const hours = Math.floor(minutes / 60);
+            if(hours < 24) return `${hours} hour ago`;
+            const days = Math.floor(hours / 24);
+            return `${days} day ago`;
+        }
+
+        // Helper function to calculate remaining time
+        function timeRemaining(deadline) {
+            const diff = deadline - Date.now();
+            if(diff <= 0) return "Expired";
+            const hours = Math.floor(diff / 3600000);
+            const minutes = Math.floor((diff % 3600000) / 60000);
+            const seconds = Math.floor((diff % 60000) / 1000);
+            return `${hours}h ${minutes}m ${seconds}s left`;
+        }
+
         function loadOrders() {
             db.ref('orders').on('value', snap => {
                 const notifBox = document.getElementById('notifContainer');
                 const msgBox = document.getElementById('msgContainer');
                 notifBox.innerHTML = ""; msgBox.innerHTML = "";
+                
+                // Clear previous live timers
+                liveTimers.forEach(timer => clearInterval(timer));
+                liveTimers = [];
+
                 const val = snap.val();
                 if(!val) return;
 
                 Object.keys(val).forEach(id => {
                     const o = val[id];
                     
-                    // Auto-penalize logic if time expires and no action taken
                     if(Date.now() > o.deadline && (o.status === 'pending_seller' || o.status === 'pending_buyer')) {
                         processExpiredTrade(id, o); 
                         return;
@@ -322,36 +362,65 @@
 
                     // SELLER VIEW: A buyer paid, waiting for seller to send info
                     if(o.sellerId === currentUser.uid && o.status === 'pending_seller') {
-                        notifBox.innerHTML += `
-                            <div class="premium-card p-6 border-l-4 border-rose-500">
-                                <p class="text-[8px] font-black uppercase text-rose-500 mb-2">New Escrow Received</p>
-                                <h3 class="text-sm font-black text-gray-800 uppercase mb-1">${o.title || 'Item'}</h3>
-                                <p class="text-xs font-black mb-4">Amount Held: ৳${o.amount}</p>
-                                <button onclick="approveTrade('${id}')" class="w-full bg-black text-white py-3 rounded-xl text-[9px] font-black">APPROVE & REVEAL DATA</button>
-                            </div>`;
+                        const div = document.createElement('div');
+                        div.className = "premium-card p-6 border-l-4 border-rose-500";
+                        div.innerHTML = `
+                            <div class="flex justify-between items-center mb-2">
+                                <p class="text-[8px] font-black uppercase text-rose-500">New Escrow Received</p>
+                                <p class="text-[8px] font-bold text-gray-400 time-ago-text">Just now</p>
+                            </div>
+                            <h3 class="text-sm font-black text-gray-800 uppercase mb-1">${o.title || 'Item'}</h3>
+                            <p class="text-[10px] font-bold text-gray-500 mb-1">Pieces: ${o.pieces || 1}</p>
+                            <p class="text-xs font-black mb-2">Amount Held: ৳${o.amount}</p>
+                            <p class="text-[9px] font-bold text-rose-400 mb-4 deadline-text">Calculating time...</p>
+                            <button onclick="approveTrade('${id}')" class="w-full bg-black text-white py-3 rounded-xl text-[9px] font-black">APPROVE & REVEAL DATA</button>
+                        `;
+                        notifBox.appendChild(div);
+
+                        // Update time ago and deadline live
+                        const timer1 = setInterval(() => {
+                            div.querySelector('.time-ago-text').innerText = timeAgo(o.timestamp);
+                            div.querySelector('.deadline-text').innerText = timeRemaining(o.deadline);
+                        }, 1000);
+                        liveTimers.push(timer1);
                     }
 
                     // BUYER VIEW: Seller approved, waiting for buyer to confirm release or report
                     if(o.buyerId === currentUser.uid && o.status === 'pending_buyer') {
-                        msgBox.innerHTML += `
-                            <div class="premium-card p-6 bg-blue-50/30 border-l-4 border-blue-500">
-                                <div class="flex justify-between items-center mb-2">
-                                    <p class="text-[8px] font-black text-blue-600 uppercase">Seller Released Info</p>
-                                    <p class="text-xs font-black text-blue-600">৳${o.amount}</p>
-                                </div>
-                                <h3 class="text-sm font-black text-gray-800 uppercase mb-2">${o.title || 'Item'}</h3>
-                                
-                                <!-- Revealed Secret Data -->
-                                <div class="bg-white p-4 rounded-xl text-[11px] mb-5 border shadow-sm">
-                                    <p class="text-[9px] font-black text-gray-400 uppercase mb-2"><i class="fas fa-unlock mr-1"></i> Secret Description</p>
-                                    <p class="font-bold text-gray-800">${o.secretDescription || 'No data provided.'}</p>
-                                </div>
+                        const div = document.createElement('div');
+                        div.className = "premium-card p-6 bg-blue-50/30 border-l-4 border-blue-500";
+                        div.innerHTML = `
+                            <div class="flex justify-between items-center mb-2">
+                                <p class="text-[8px] font-black text-blue-600 uppercase">Seller Released Info</p>
+                                <p class="text-xs font-black text-blue-600">৳${o.amount}</p>
+                            </div>
+                            <div class="flex justify-between items-center mb-2">
+                                <p class="text-[10px] font-bold text-gray-500">Pieces: ${o.pieces || 1}</p>
+                                <p class="text-[8px] font-bold text-gray-400 time-ago-text">Just now</p>
+                            </div>
+                            <h3 class="text-sm font-black text-gray-800 uppercase mb-2">${o.title || 'Item'}</h3>
+                            
+                            <!-- Revealed Secret Data -->
+                            <div class="bg-white p-4 rounded-xl text-[11px] mb-3 border shadow-sm">
+                                <p class="text-[9px] font-black text-gray-400 uppercase mb-2"><i class="fas fa-unlock mr-1"></i> Secret Description</p>
+                                <p class="font-bold text-gray-800">${o.secretDescription || 'No data provided.'}</p>
+                            </div>
 
-                                <div class="flex gap-2">
-                                    <button onclick="finalComplete('${id}', ${o.amount}, '${o.sellerId}')" class="flex-1 bg-blue-600 text-white py-4 rounded-2xl text-[9px] font-black">CONFIRM RELEASE</button>
-                                    <button onclick="rejectTrade('${id}')" class="flex-1 bg-rose-50 text-rose-600 py-4 rounded-2xl text-[9px] font-black">REPORT</button>
-                                </div>
-                            </div>`;
+                            <p class="text-[9px] font-bold text-rose-500 mb-4 deadline-text">Calculating time...</p>
+
+                            <div class="flex gap-2">
+                                <button onclick="finalComplete('${id}', ${o.amount}, '${o.sellerId}')" class="flex-1 bg-blue-600 text-white py-4 rounded-2xl text-[9px] font-black">CONFIRM RELEASE</button>
+                                <button onclick="rejectTrade('${id}')" class="flex-1 bg-rose-50 text-rose-600 py-4 rounded-2xl text-[9px] font-black">REPORT</button>
+                            </div>
+                        `;
+                        msgBox.appendChild(div);
+
+                        // Update time ago and deadline live
+                        const timer2 = setInterval(() => {
+                            div.querySelector('.time-ago-text').innerText = timeAgo(o.timestamp);
+                            div.querySelector('.deadline-text').innerText = timeRemaining(o.deadline);
+                        }, 1000);
+                        liveTimers.push(timer2);
                     }
                 });
             });
@@ -409,14 +478,12 @@
         // Auto penalty if time expires
         async function processExpiredTrade(id, o) {
             if(o.status === 'pending_seller') {
-                // Seller didn't respond -> Refund buyer, block seller
                 const bSnap = await db.ref(`user-info/${o.buyerId}/balance`).get();
                 await db.ref(`user-info/${o.buyerId}/balance`).set((bSnap.val() || 0) + o.amount);
                 await db.ref(`user-info/${o.sellerId}`).update({ isBlocked: true });
                 await db.ref(`orders/${id}`).update({ status: 'expired_seller_blocked' });
             } 
             else if(o.status === 'pending_buyer') {
-                // Buyer didn't confirm release -> Give money to seller, block buyer
                 const sSnap = await db.ref(`user-info/${o.sellerId}/balance`).get();
                 await db.ref(`user-info/${o.sellerId}/balance`).set((sSnap.val() || 0) + o.amount);
                 await db.ref(`user-info/${o.buyerId}`).update({ isBlocked: true });
