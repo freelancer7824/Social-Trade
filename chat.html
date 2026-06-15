@@ -70,6 +70,7 @@
             overflow: hidden;
             position: relative;
             transition: max-height 0.3s ease;
+            word-break: break-word; /* Prevents long links/codes from breaking UI */
         }
         .msg-text-box.expanded {
             max-height: none; /* Shows full text */
@@ -295,7 +296,7 @@
             container.innerHTML = sortedMsgs.map(m => {
                 const isMe = m.senderId === myUid;
                 let content = "";
-                let eventType = "text"; // to check if hold should work for copy
+                let eventType = "text"; 
                 
                 if(m.type === 'image') {
                     const cachedThumb = localStorage.getItem('img_' + m.text);
@@ -308,7 +309,6 @@
                     eventType = "voice";
                 } else {
                     /* --- HTML PREVENT & TRUNCATE LOGIC --- */
-                    // Using textContent approach via a function to prevent HTML rendering
                     const isLong = m.text.length > 150; 
                     const readMoreColor = isMe ? 'text-blue-200' : 'text-blue-500';
                     
@@ -330,9 +330,9 @@
                 return `<div class="flex ${isMe ? 'justify-end' : 'justify-start'}" ${holdAttr}><div class="max-w-[85%] flex flex-col ${isMe ? 'items-end' : 'items-start'}">${content}${isMe ? `<div class="mt-0.5 flex items-center text-gray-400 text-[10px]">${timeAgo(m.timestamp)} ${seenTick}</div>` : ''}</div></div>`;
             }).join('');
             
-            // Securely insert text to prevent HTML execution
+            // Securely insert text to prevent HTML execution and Code Preview
             document.querySelectorAll('.msg-text-box').forEach(el => {
-                el.textContent = decodeURIComponent(el.dataset.text);
+                el.innerText = decodeURIComponent(el.dataset.text); // innerText prevents HTML/CSS/JS rendering
             });
 
             if(isAtBottom) {
@@ -342,7 +342,7 @@
 
         // --- FULL TEXT POPUP LOGIC ---
         function openTextModal(text) {
-            document.getElementById('modalTextContent').innerText = text; // textContent prevents HTML execution here too
+            document.getElementById('modalTextContent').innerText = text; //innerText prevents HTML execution inside the popup
             document.getElementById('textModal').style.display = 'flex';
         }
 
