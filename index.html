@@ -1,235 +1,986 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="bn">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SocialTrade - Buy & Sell Social Accounts</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    
-    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
-    <style>
-        html { scroll-behavior: smooth; }
+  <!-- OneSignal SDK -->
+  <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+  <script>
+    window.OneSignalDeferred = window.OneSignalDeferred || [];
+    OneSignalDeferred.push(async function(OneSignal) {
+      await OneSignal.init({
+        appId: "8238cf86-d360-4006-99aa-dbc87015495f",
+        allowLocalhostAsSecureOrigin: true,
+        notifyButton: { enable: false },
+      });
+      console.log('✅ OneSignal Initialized');
+      const permission = await OneSignal.Notifications.requestPermission();
+      console.log('🔔 Permission:', permission);
+      const subId = OneSignal.User.PushSubscription.id;
+      console.log('🆔 Subscription ID:', subId);
+    });
+  </script>
 
-        /* Phone Shake Animation */
-        @keyframes phone-shake {
-            0%, 100% { transform: rotate(0); }
-            10%, 30%, 50% { transform: rotate(-15deg); }
-            20%, 40%, 60% { transform: rotate(15deg); }
-        }
-        .animate-phone { display: inline-block; animation: phone-shake 2s infinite; }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>SecretIntro · Feed</title>
+  <style>
+    /* ----- RESET & GLOBAL ----- */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
 
-        /* Hero Text Slider */
-        .slider-wrapper { height: 1.2em; overflow: hidden; display: inline-block; vertical-align: bottom; }
-        .slider-text { display: flex; flex-direction: column; animation: move-up 10s cubic-bezier(0.645, 0.045, 0.355, 1) infinite; }
-        @keyframes move-up {
-            0%, 20% { transform: translateY(0); }
-            25%, 45% { transform: translateY(-25%); }
-            50%, 70% { transform: translateY(-50%); }
-            75%, 95% { transform: translateY(-75%); }
-            100% { transform: translateY(0); }
-        }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #f0f2f5;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
 
-        /* Floating & Glowing Chat Button Animation */
-        @keyframes floating {
-            0% { transform: translateY(0px); box-shadow: 0 5px 15px rgba(37, 99, 235, 0.4); }
-            50% { transform: translateY(-10px); box-shadow: 0 15px 25px rgba(37, 99, 235, 0.6); }
-            100% { transform: translateY(0px); box-shadow: 0 5px 15px rgba(37, 99, 235, 0.4); }
-        }
-        .live-chat-btn { animation: floating 3s ease-in-out infinite; }
-    </style>
+    /* ----- FULLSCREEN IFRAME ----- */
+    .fullscreen-iframe {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      height: 100dvh;
+      border: none;
+      display: block;
+      background: #fff;
+      margin: 0;
+      padding: 0;
+      z-index: 1;
+      opacity: 0;
+      transition: opacity 0.8s ease;
+    }
+
+    .fullscreen-iframe.loaded {
+      opacity: 1;
+    }
+
+    /* ----- LOADING OVERLAY (fully responsive) ----- */
+    .loading-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      height: 100dvh;
+      background: #f0f2f5;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      transition: opacity 0.8s ease;
+      padding: 20px;
+    }
+
+    .loading-overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .loading-spinner {
+      width: clamp(36px, 10vw, 44px);
+      height: clamp(36px, 10vw, 44px);
+      border: 4px solid #e4e6eb;
+      border-top: 4px solid #1877f2;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    .loading-overlay .loading-text {
+      margin-top: 18px;
+      color: #65676b;
+      font-size: clamp(13px, 3.5vw, 15px);
+      font-weight: 500;
+      text-align: center;
+    }
+
+    .loading-overlay .loading-sub {
+      color: #8a8d91;
+      font-size: clamp(11px, 3vw, 13px);
+      margin-top: 6px;
+      text-align: center;
+    }
+
+    .loading-overlay .progress-bar {
+      width: min(220px, 70vw);
+      height: 4px;
+      background: #e4e6eb;
+      border-radius: 4px;
+      margin-top: 18px;
+      overflow: hidden;
+    }
+
+    .loading-overlay .progress-bar .progress-fill {
+      height: 100%;
+      background: #1877f2;
+      border-radius: 4px;
+      width: 0%;
+      transition: width 0.5s ease;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    /* ----- TOAST ----- */
+    .toast-msg {
+      position: fixed;
+      top: max(16px, env(safe-area-inset-top, 16px));
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 200;
+      background: #333;
+      color: #fff;
+      padding: clamp(8px, 2.5vw, 12px) clamp(16px, 5vw, 28px);
+      border-radius: 30px;
+      font-size: clamp(12px, 3.2vw, 14px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+      display: none;
+      animation: fadeInDown 0.3s ease;
+      max-width: 90vw;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    @keyframes fadeInDown {
+      from { opacity: 0; transform: translate(-50%, -20px); }
+      to { opacity: 1; transform: translate(-50%, 0); }
+    }
+
+    /* ----- NOTIFICATION POPUP (responsive) ----- */
+    .notif-popup {
+      position: fixed;
+      top: max(70px, calc(env(safe-area-inset-top, 0px) + 60px));
+      right: max(12px, env(safe-area-inset-right, 12px));
+      background: #ffffff;
+      border-radius: 16px;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
+      padding: clamp(12px, 3vw, 16px) clamp(14px, 3.5vw, 20px);
+      z-index: 10000;
+      max-width: min(380px, 90vw);
+      width: 100%;
+      display: none;
+      animation: slideInRight 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+      cursor: pointer;
+      border-left: 4px solid #1877f2;
+      transition: all 0.3s ease;
+    }
+
+    .notif-popup:hover {
+      transform: scale(1.02);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+    }
+
+    @keyframes slideInRight {
+      from { transform: translateX(120%) scale(0.9); opacity: 0; }
+      to { transform: translateX(0) scale(1); opacity: 1; }
+    }
+
+    .notif-popup .notif-header {
+      display: flex;
+      align-items: center;
+      gap: clamp(8px, 2.5vw, 14px);
+    }
+
+    .notif-popup .notif-avatar {
+      width: clamp(36px, 9vw, 44px);
+      height: clamp(36px, 9vw, 44px);
+      border-radius: 50%;
+      object-fit: cover;
+      flex-shrink: 0;
+      border: 2px solid #e4e6eb;
+      background: #e4e6eb;
+    }
+
+    .notif-popup .notif-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .notif-popup .notif-name {
+      font-weight: 700;
+      font-size: clamp(13px, 3.5vw, 15px);
+      color: #050505;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .notif-popup .notif-preview {
+      font-size: clamp(11px, 3vw, 13px);
+      color: #65676b;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-top: 2px;
+    }
+
+    .notif-popup .notif-time {
+      font-size: clamp(10px, 2.8vw, 11px);
+      color: #8a8d91;
+      margin-top: 2px;
+    }
+
+    .notif-popup .notif-close {
+      position: absolute;
+      top: 6px;
+      right: 8px;
+      font-size: clamp(16px, 4.5vw, 20px);
+      color: #8a8d91;
+      cursor: pointer;
+      background: none;
+      border: none;
+      padding: 4px;
+      border-radius: 50%;
+      transition: background 0.2s;
+      line-height: 1;
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .notif-popup .notif-close:hover {
+      background: #f0f2f5;
+    }
+
+    .notif-popup .notif-badge {
+      position: absolute;
+      top: -6px;
+      right: -6px;
+      background: #e74c3c;
+      color: #fff;
+      border-radius: 50%;
+      width: clamp(18px, 5vw, 22px);
+      height: clamp(18px, 5vw, 22px);
+      font-size: clamp(9px, 2.5vw, 11px);
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 2px solid #fff;
+    }
+
+    .notif-popup .notif-message-count {
+      font-size: clamp(10px, 2.8vw, 12px);
+      color: #1877f2;
+      font-weight: 600;
+      margin-top: 2px;
+    }
+
+    .notif-popup.multiple {
+      border-left-color: #e74c3c;
+    }
+
+    .notif-popup .notif-sound-indicator {
+      position: absolute;
+      bottom: 6px;
+      right: 12px;
+      font-size: clamp(12px, 3.5vw, 14px);
+      color: #1877f2;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(0.9); }
+    }
+
+    /* ----- RESPONSIVE FINE-TUNING (small screens) ----- */
+    @media (max-width: 480px) {
+      .notif-popup {
+        max-width: min(320px, 92vw);
+        right: 10px;
+        top: 65px;
+        padding: 12px 14px;
+      }
+      .notif-popup .notif-avatar {
+        width: 38px;
+        height: 38px;
+      }
+    }
+
+    @media (max-width: 380px) {
+      .notif-popup {
+        max-width: min(280px, 94vw);
+        right: 8px;
+        top: 60px;
+        padding: 10px 12px;
+      }
+      .notif-popup .notif-avatar {
+        width: 34px;
+        height: 34px;
+      }
+      .loading-overlay .progress-bar {
+        width: 160px;
+      }
+    }
+
+    /* Ensure iframe fills screen on all devices */
+    @supports (height: 100dvh) {
+      .fullscreen-iframe,
+      .loading-overlay {
+        height: 100dvh;
+      }
+    }
+
+    /* Optional: nicer tap highlight removal */
+    button, .notif-popup, .fullscreen-iframe {
+      -webkit-tap-highlight-color: transparent;
+    }
+  </style>
 </head>
-<body class="bg-gray-50 flex flex-col min-h-screen relative">
+<body>
 
-    <nav class="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-50">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between h-16 items-center">
-                <div class="flex-shrink-0 flex items-center cursor-pointer">
-                    <span class="text-xl md:text-2xl font-extrabold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-                        <img style="width:160px" src="log.png" alt="Social Trade">
-                    </span>
-                </div>
-                
-                <div class="flex items-center space-x-3 md:space-x-8">
-                    <a href="javascript:void(0)" onclick="redirectToWhatsApp()" class="flex items-center text-gray-600 hover:text-green-600 transition duration-300 font-medium text-xs md:text-base">
-                        <span class="animate-phone">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1 text-green-500" fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L0 24l6.335-1.662c1.72.94 3.675 1.439 5.662 1.439h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
-                            </svg>
-                        </span>
-                        <span id="phoneText" class="hidden sm:inline">+880 1712-345678</span>
-                    </a>
+  <!-- Loading Overlay -->
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="loading-spinner"></div>
+    <div class="loading-text">Connecting to SecretIntro...</div>
+    <div class="loading-sub">Please wait while we load your feed</div>
+    <div class="progress-bar">
+      <div class="progress-fill" id="progressFill"></div>
+    </div>
+  </div>
 
-                    <div class="relative inline-block text-left">
-                        <button id="loginBtn" class="inline-flex items-center justify-center px-4 py-1.5 md:px-5 md:py-2 border border-transparent text-sm font-bold rounded-full text-white bg-blue-600 hover:bg-blue-700 focus:outline-none transition duration-300 shadow-md">
-                            Login
-                            <svg class="-mr-1 ml-2 h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
-                                <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
-                            </svg>
-                        </button>
-                        <div id="dropdownMenu" class="hidden absolute right-0 mt-2 w-48 md:w-56 rounded-xl shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-50">
-                            <div class="py-2" role="menu">
-                                <a href="login.html" class="block px-4 py-3 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 border-b border-gray-100" role="menuitem">Sign In</a>
-                                <a href="signup.html" class="block px-4 py-3 text-sm text-green-600 font-bold hover:bg-green-50" role="menuitem">Create Account</a>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </nav>
+  <!-- Toast -->
+  <div class="toast-msg" id="toast"></div>
 
-    <main class="flex-grow">
-        <header class="bg-white py-12 md:py-24 px-4 overflow-hidden text-center">
-            <div class="max-w-7xl mx-auto">
-                <h1 class="text-3xl md:text-6xl font-black text-gray-900 leading-tight">
-                    Trusted Platform to <br class="hidden md:block">
-                    <span class="text-blue-600 slider-wrapper">
-                        <span class="slider-text text-left">
-                            <span>Buy FB Accounts</span>
-                            <span>Sell YouTube Channels</span>
-                            <span>Trade Instagram Pages</span>
-                            <span>Grow TikTok Assets</span>
-                        </span>
-                    </span>
-                </h1>
-                <p class="mt-6 text-base md:text-xl text-gray-600 max-w-2xl mx-auto font-medium">The world's leading marketplace to buy and sell established social media accounts securely.</p>
-                <div class="mt-10 flex flex-col sm:flex-row justify-center gap-4 px-6">
-                    <button class="w-full sm:w-auto px-8 py-4 bg-blue-600 text-white font-bold rounded-2xl shadow-xl hover:bg-blue-700 transition duration-300">Explore Marketplace</button>
-                    <a href="#how-it-works" class="w-full sm:w-auto px-8 py-4 bg-white border-2 border-gray-200 text-center text-gray-800 font-bold rounded-2xl hover:bg-gray-50 transition duration-300">How it Works?</a>
-                </div>
-            </div>
-        </header>
+  <!-- Notification Popup -->
+  <div class="notif-popup" id="notifPopup" onclick="openNotifChat()">
+    <button class="notif-close" onclick="event.stopPropagation(); closeNotif()">&times;</button>
+    <div class="notif-header">
+      <img class="notif-avatar" id="notifAvatar" src="" alt="Avatar">
+      <div class="notif-info">
+        <div class="notif-name" id="notifName">User</div>
+        <div class="notif-preview" id="notifPreview">New message</div>
+        <div class="notif-time" id="notifTime">Just now</div>
+        <div class="notif-message-count" id="notifCount" style="display:none;"></div>
+      </div>
+    </div>
+    <div class="notif-sound-indicator">🔔</div>
+  </div>
 
-        <section id="how-it-works" class="py-16 bg-white border-t border-gray-100">
-            <div class="max-w-7xl mx-auto px-4 flex flex-col lg:flex-row items-center gap-12">
-                <div class="w-full lg:w-1/2">
-                    <div class="relative rounded-3xl overflow-hidden shadow-2xl bg-black aspect-video">
-                        <iframe class="w-full h-full" src="https://www.youtube.com/embed/8HgvuM1-ijw" title="How it works" frameborder="0" allowfullscreen></iframe>
-                    </div>
-                </div>
-                <div class="w-full lg:w-1/2">
-                    <h2 class="text-3xl md:text-4xl font-black text-gray-900 mb-6">Watch How to <span class="text-blue-600">Start Trading</span></h2>
-                    <p class="text-gray-600 text-lg mb-6">Learn about our secure escrow process and listing management in minutes.</p>
-                    <ul class="space-y-3">
-                        <li class="flex items-center text-gray-700 font-medium">✅ Learn how to list your account.</li>
-                        <li class="flex items-center text-gray-700 font-medium">✅ Secure Escrow payment system.</li>
-                        <li class="flex items-center text-gray-700 font-medium">✅ 100% Account safety guarantee.</li>
-                    </ul>
-                </div>
-            </div>
-        </section>
+  <!-- FULL SCREEN IFRAME -->
+  <iframe 
+    class="fullscreen-iframe" 
+    id="mainIframe"
+    src="home.html" 
+    title="SecretIntro Feed"
+    allowfullscreen
+    loading="eager"
+    sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
+  ></iframe>
 
-        <section class="py-16 bg-gray-50 border-t border-gray-100">
-            <div class="max-w-7xl mx-auto px-4">
-                <div class="text-center mb-12">
-                    <h2 class="text-3xl md:text-4xl font-black text-gray-900">Why Trust <span class="text-blue-600">SocialTrade?</span></h2>
-                </div>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                        <div class="text-blue-600 mb-4 flex justify-center">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
-                        </div>
-                        <h3 class="text-lg font-bold mb-2 text-center">Verified Sellers</h3>
-                        <p class="text-gray-600 text-sm text-center">Every account is manually verified by our experts before listing.</p>
-                    </div>
-                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                        <div class="text-green-600 mb-4 flex justify-center">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                        </div>
-                        <h3 class="text-lg font-bold mb-2 text-center">Escrow Protection</h3>
-                        <p class="text-gray-600 text-sm text-center">Funds are held safely until the buyer confirms account ownership.</p>
-                    </div>
-                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                        <div class="text-purple-600 mb-4 flex justify-center">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                        </div>
-                        <h3 class="text-lg font-bold mb-2 text-center">Instant Transfer</h3>
-                        <p class="text-gray-600 text-sm text-center">Automated systems for quick and hassle-free account handovers.</p>
-                    </div>
-                </div>
-            </div>
-        </section>
-    </main>
+  <script>
+    // ========== FIREBASE CONFIG ==========
+    const firebaseConfig = {
+      apiKey: "AIzaSyDOJaV7zMLhtA-_z1nkcdbtaa3w7M_0Fh4",
+      authDomain: "money-generate-dbab3.firebaseapp.com",
+      databaseURL: "https://money-generate-dbab3-default-rtdb.firebaseio.com",
+      projectId: "money-generate-dbab3",
+      storageBucket: "money-generate-dbab3.firebasestorage.app",
+      messagingSenderId: "579756089926",
+      appId: "1:579756089926:web:abbe35377e3657889be047"
+    };
 
-    <a href="support.html" class="live-chat-btn fixed bottom-6 right-6 z-[9999] flex items-center bg-blue-600 text-white px-4 py-2.5 rounded-full shadow-lg border-2 border-white/20 hover:bg-blue-700 transition duration-300">
-        <div class="relative flex items-center">
-            <span class="flex h-2.5 w-2.5 mr-2">
-                <span class="animate-ping absolute inline-flex h-2.5 w-2.5 rounded-full bg-green-400 opacity-75"></span>
-                <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span>
-            </span>
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-            </svg>
-            <span class="text-sm font-bold tracking-tight whitespace-nowrap">Live Chat</span>
-        </div>
-    </a>
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
 
-    <footer class="bg-white border-t border-gray-200 pt-8 pb-6">
-        <div class="max-w-7xl mx-auto px-4 text-center">
-            <div class="flex flex-col md:flex-row justify-between items-center gap-6">
-                <div class="text-xl font-black text-gray-900">SOCIAL<span class="text-blue-600">TRADE</span></div>
-                <div class="flex space-x-6 text-sm font-semibold text-gray-600">
-                    <a href="#" class="hover:text-blue-600">Marketplace</a>
-                    <a href="#" class="hover:text-blue-600">Support</a>
-                    <a href="#" class="hover:text-blue-600">Privacy</a>
-                </div>
-                <div class="flex space-x-4">
-                    <div class="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-xs">FB</div>
-                    <div class="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-xs">IG</div>
-                </div>
-            </div>
-            <div class="mt-8 pt-6 border-t border-gray-100 text-sm text-gray-400">
-                &copy; 2026 SocialTrade Inc. All rights reserved.
-            </div>
-        </div>
-    </footer>
+    // ========== DOM REFS ==========
+    const loadingOverlay = document.getElementById('loadingOverlay');
+    const toast = document.getElementById('toast');
+    const mainIframe = document.getElementById('mainIframe');
+    const progressFill = document.getElementById('progressFill');
+    const notifPopup = document.getElementById('notifPopup');
+    const notifAvatar = document.getElementById('notifAvatar');
+    const notifName = document.getElementById('notifName');
+    const notifPreview = document.getElementById('notifPreview');
+    const notifTime = document.getElementById('notifTime');
+    const notifCount = document.getElementById('notifCount');
 
-    <script>
-        // --- 1. Firebase Config ---
-        const firebaseConfig = {
-  apiKey: "AIzaSyD1mn9MR9hyZ36Ce1lnGyJYmL6AHopScTA",
-  authDomain: "social-media-5e6c8.firebaseapp.com",
-  databaseURL: "https://social-media-5e6c8-default-rtdb.firebaseio.com/",
-  projectId: "social-media-5e6c8",
-  storageBucket: "social-media-5e6c8.firebasestorage.app",
-  messagingSenderId: "897473713729",
-  appId: "1:897473713729:web:7ba552ed4c1be8754418c0",
-  measurementId: "G-7JJTYPSX5P"
-};
-        firebase.initializeApp(firebaseConfig);
-        const auth = firebase.auth();
+    // ========== STATE ==========
+    let toastTimer = null;
+    let statusUpdateInterval = null;
+    let iframeLoaded = false;
+    let progressInterval = null;
+    let progressValue = 0;
+    let isFirstLoad = true;
+    let notifTimer = null;
+    let pendingNotifData = null;
+    let isNotifShowing = false;
+    let lastNotifSender = null;
+    let lastNotifTime = 0;
+    let messageListenerUnsubscribe = null;
+    let currentUser = null;
+    let shownMessageIds = new Set();
+    let allUsersStatusListener = null;
+    let onlineUsers = new Set();
+    let isPageVisible = true;
+    let hasSetOffline = false;
 
-        // --- 2. Login Redirect Logic ---
-        auth.onAuthStateChanged((user) => {
-            if (user) {
-                window.location.href = "account.html";
-            }
-        });
-
-        // --- 3. Dropdown Menu Toggle ---
-        const loginBtn = document.getElementById('loginBtn');
-        const dropdownMenu = document.getElementById('dropdownMenu');
-        
-        loginBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            dropdownMenu.classList.toggle('hidden');
-        });
-
-        window.addEventListener('click', () => {
-            if (!dropdownMenu.classList.contains('hidden')) {
-                dropdownMenu.classList.add('hidden');
-            }
-        });
-
-        // --- 4. WhatsApp Redirect Logic ---
-        function redirectToWhatsApp() {
-            const phoneText = document.getElementById('phoneText').innerText;
-            const cleanNumber = phoneText.replace(/\D/g, ''); 
-            window.open(`https://wa.me/${cleanNumber}`, '_blank');
+    // ========== SLOW PROGRESS SIMULATION ==========
+    function startSlowProgress() {
+      progressValue = 0;
+      if (progressInterval) clearInterval(progressInterval);
+      progressInterval = setInterval(() => {
+        if (progressValue < 90) {
+          const increment = 0.5 + Math.random() * 2.5;
+          progressValue += increment;
+          if (progressValue > 90) progressValue = 90;
+          progressFill.style.width = progressValue + '%';
         }
-    </script>
+      }, 300);
+    }
 
+    function completeProgress() {
+      if (progressInterval) {
+        clearInterval(progressInterval);
+        progressInterval = null;
+      }
+      progressValue = 100;
+      progressFill.style.width = '100%';
+      setTimeout(() => {
+        loadingOverlay.classList.add('hidden');
+        mainIframe.classList.add('loaded');
+        isFirstLoad = false;
+        if (currentUser) {
+          startMessageListener(currentUser.uid);
+          startAllUsersStatusListener();
+        }
+      }, 600);
+    }
+
+    // ========== TOAST ==========
+    function showToast(msg) {
+      toast.textContent = msg;
+      toast.style.display = 'block';
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => {
+        toast.style.display = 'none';
+      }, 3000);
+    }
+
+    // ========== NOTIFICATION POPUP ==========
+    function playNotifSound() {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.frequency.value = 880;
+        osc.type = 'sine';
+        gain.gain.value = 0.12;
+        osc.start();
+        setTimeout(() => {
+          osc.frequency.value = 1100;
+          setTimeout(() => {
+            osc.stop();
+            ctx.close();
+          }, 150);
+        }, 150);
+      } catch (e) { console.log('Sound error:', e); }
+    }
+
+    function showNotification(senderId, senderName, message, photoURL, timestamp, messageCount) {
+      const now = Date.now();
+      if (lastNotifSender === senderId && now - lastNotifTime < 2000) {
+        if (notifPopup.style.display === 'block') {
+          updateExistingNotification(senderName, message, messageCount);
+        }
+        return;
+      }
+
+      lastNotifSender = senderId;
+      lastNotifTime = now;
+
+      pendingNotifData = {
+        senderId: senderId,
+        senderName: senderName,
+        photoURL: photoURL
+      };
+
+      const msgId = `${senderId}_${message}_${timestamp}`;
+      if (shownMessageIds.has(msgId)) return;
+      shownMessageIds.add(msgId);
+      if (shownMessageIds.size > 200) {
+        const entries = Array.from(shownMessageIds);
+        shownMessageIds = new Set(entries.slice(entries.length - 100));
+      }
+
+      notifAvatar.src = photoURL || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=100&q=80';
+      notifName.textContent = senderName || 'User';
+      
+      let previewText = message || 'New message';
+      if (previewText.length > 60) previewText = previewText.substring(0, 60) + '...';
+      notifPreview.textContent = previewText;
+
+      const msgTime = timestamp ? new Date(timestamp) : new Date();
+      notifTime.textContent = formatTime(msgTime);
+
+      if (messageCount && messageCount > 1) {
+        notifCount.style.display = 'block';
+        notifCount.textContent = `📨 ${messageCount} new messages`;
+        notifPopup.classList.add('multiple');
+      } else {
+        notifCount.style.display = 'none';
+        notifPopup.classList.remove('multiple');
+      }
+
+      playNotifSound();
+      notifPopup.style.display = 'block';
+      isNotifShowing = true;
+
+      clearTimeout(notifTimer);
+      notifTimer = setTimeout(() => closeNotif(), 5000);
+    }
+
+    function updateExistingNotification(senderName, message, messageCount) {
+      let previewText = message || 'New message';
+      if (previewText.length > 60) previewText = previewText.substring(0, 60) + '...';
+      notifPreview.textContent = previewText;
+      
+      if (messageCount && messageCount > 1) {
+        notifCount.style.display = 'block';
+        notifCount.textContent = `📨 ${messageCount} new messages`;
+        notifPopup.classList.add('multiple');
+      }
+      
+      clearTimeout(notifTimer);
+      notifTimer = setTimeout(() => closeNotif(), 5000);
+    }
+
+    function closeNotif() {
+      notifPopup.style.display = 'none';
+      isNotifShowing = false;
+      clearTimeout(notifTimer);
+      pendingNotifData = null;
+    }
+
+    function openNotifChat() {
+      if (pendingNotifData && pendingNotifData.senderId) {
+        closeNotif();
+        const senderId = pendingNotifData.senderId;
+        try {
+          const iframeDoc = mainIframe.contentDocument || mainIframe.contentWindow.document;
+          const chatItems = iframeDoc.querySelectorAll('.chat-item');
+          let found = false;
+          for (const item of chatItems) {
+            if (item.dataset.otherId === senderId) {
+              item.click();
+              found = true;
+              break;
+            }
+          }
+          if (!found) {
+            mainIframe.src = `messages.html?user=${senderId}`;
+          }
+        } catch (e) {
+          console.log('Could not open chat in iframe:', e);
+          mainIframe.src = `messages.html?user=${senderId}`;
+        }
+      }
+    }
+
+    function formatTime(date) {
+      const now = new Date();
+      const diff = now - date;
+      if (diff < 60000) return 'Just now';
+      if (diff < 3600000) return Math.floor(diff / 60000) + 'm ago';
+      if (diff < 86400000) return Math.floor(diff / 3600000) + 'h ago';
+      if (diff < 604800000) return Math.floor(diff / 86400000) + 'd ago';
+      return date.toLocaleDateString();
+    }
+
+    // ========== MESSAGE LISTENER ==========
+    function startMessageListener(userId) {
+      if (messageListenerUnsubscribe) {
+        messageListenerUnsubscribe();
+        messageListenerUnsubscribe = null;
+      }
+
+      console.log('👂 Starting message listener for user:', userId);
+
+      const chatQuery = db.collection('chats').where('participants', 'array-contains', userId);
+
+      let lastProcessedMessages = new Map();
+
+      messageListenerUnsubscribe = chatQuery.onSnapshot(async (snapshot) => {
+        for (const doc of snapshot.docs) {
+          const data = doc.data();
+          const messages = data.messages || [];
+          if (messages.length === 0) continue;
+
+          const lastMsg = messages[messages.length - 1];
+          
+          if (lastMsg.sender === userId) continue;
+          if (lastMsg.seen) continue;
+          if (lastMsg.deletedFor && lastMsg.deletedFor.includes(userId)) continue;
+
+          const chatId = doc.id;
+          const msgKey = `${chatId}_${lastMsg.timestamp || lastMsg.time}`;
+          if (lastProcessedMessages.has(chatId) && lastProcessedMessages.get(chatId) === msgKey) continue;
+
+          const senderData = await getUserData(lastMsg.sender);
+          if (!senderData) continue;
+
+          let previewText = lastMsg.text || '📎 File';
+          if (lastMsg.imageUrl) previewText = '📷 Image';
+          if (lastMsg.videoUrl) previewText = '🎥 Video';
+          if (lastMsg.audioUrl) previewText = '🎤 Voice';
+
+          let unreadCount = 0;
+          for (const msg of messages) {
+            if (msg.sender === lastMsg.sender && !msg.seen && !msg.deletedFor?.includes(userId)) {
+              unreadCount++;
+            }
+          }
+
+          const senderName = senderData.fullName || senderData.firstName || 'User';
+          const photoURL = senderData.photoURL || '';
+          
+          showNotification(lastMsg.sender, senderName, previewText, photoURL, lastMsg.timestamp || lastMsg.time, unreadCount);
+
+          lastProcessedMessages.set(chatId, msgKey);
+        }
+      }, (error) => {
+        console.error('Error listening to messages:', error);
+      });
+    }
+
+    // ========== GET USER DATA ==========
+    const userCache = new Map();
+
+    async function getUserData(uid) {
+      if (userCache.has(uid)) return userCache.get(uid);
+      try {
+        const doc = await db.collection('users').doc(uid).get();
+        if (doc.exists) {
+          const data = { id: uid, ...doc.data() };
+          userCache.set(uid, data);
+          return data;
+        }
+        return null;
+      } catch (error) {
+        console.error('Error fetching user:', error);
+        return null;
+      }
+    }
+
+    // ========== UPDATE USER STATUS ==========
+    async function setUserOnline(user) {
+      if (!user) return;
+      hasSetOffline = false;
+      try {
+        await db.collection('users').doc(user.uid).set({
+          status: 'online',
+          lastSeen: firebase.firestore.FieldValue.serverTimestamp(),
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+        console.log('✅ User status set to online:', user.uid);
+      } catch (error) {
+        console.error('Error setting user online:', error);
+      }
+    }
+
+    async function setUserOffline(user) {
+      if (!user || hasSetOffline) return;
+      hasSetOffline = true;
+      try {
+        await db.collection('users').doc(user.uid).set({
+          status: 'offline',
+          lastSeen: firebase.firestore.FieldValue.serverTimestamp(),
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+        console.log('👤 User status set to offline:', user.uid);
+      } catch (error) {
+        console.error('Error setting user offline:', error);
+        hasSetOffline = false;
+      }
+    }
+
+    // ========== LISTEN TO ALL USERS STATUS ==========
+    function startAllUsersStatusListener() {
+      if (allUsersStatusListener) {
+        allUsersStatusListener();
+        allUsersStatusListener = null;
+      }
+
+      console.log('👀 Starting all users status listener');
+
+      allUsersStatusListener = db.collection('users').onSnapshot((snapshot) => {
+        snapshot.docChanges().forEach((change) => {
+          if (change.type === 'modified' || change.type === 'added') {
+            const data = change.doc.data();
+            const uid = change.doc.id;
+            const status = data.status || 'offline';
+            
+            try {
+              const iframeDoc = mainIframe.contentDocument || mainIframe.contentWindow.document;
+              if (!iframeDoc) return;
+              
+              if (uid === currentUser?.uid) {
+                const headerDot = iframeDoc.querySelector('#header-status-dot');
+                if (headerDot) {
+                  headerDot.className = 'online-dot' + (status === 'online' ? '' : ' offline');
+                }
+              }
+              const statusEls = iframeDoc.querySelectorAll(`.online-status[data-userid="${uid}"]`);
+              statusEls.forEach(el => {
+                el.className = 'online-status ' + (status === 'online' ? 'active' : 'inactive');
+              });
+              const profileDots = iframeDoc.querySelectorAll(`.profile-container[data-userid="${uid}"] .online-dot`);
+              profileDots.forEach(el => {
+                el.className = 'online-dot' + (status === 'online' ? '' : ' offline');
+              });
+            } catch (e) {
+              // Iframe not accessible yet
+            }
+          }
+        });
+      }, (error) => {
+        console.error('Error listening to all users status:', error);
+      });
+    }
+
+    // ========== CHECK IFRAME LOADED ==========
+    function checkIframeLoaded() {
+      try {
+        const iframeDoc = mainIframe.contentDocument || mainIframe.contentWindow.document;
+        if (iframeDoc && iframeDoc.readyState === 'complete') {
+          const bodyText = iframeDoc.body?.innerText || '';
+          const hasContent = bodyText.length > 50 || iframeDoc.querySelectorAll('div, img, p').length > 3;
+          if (hasContent && !iframeLoaded) {
+            iframeLoaded = true;
+            completeProgress();
+            return true;
+          }
+        }
+        return false;
+      } catch (e) {
+        return false;
+      }
+    }
+
+    // ========== INJECT STATUS STYLES INTO IFRAME ==========
+    function injectStatusStyles() {
+      try {
+        const iframeDoc = mainIframe.contentDocument || mainIframe.contentWindow.document;
+        if (!iframeDoc) return;
+        
+        let styleEl = iframeDoc.querySelector('#status-style-inject');
+        if (!styleEl) {
+          styleEl = iframeDoc.createElement('style');
+          styleEl.id = 'status-style-inject';
+          styleEl.textContent = `
+            .online-status {
+              display: inline-block;
+              width: 10px;
+              height: 10px;
+              border-radius: 50%;
+              margin-left: 6px;
+              transition: background 0.3s;
+              position: absolute;
+              bottom: 0;
+              right: 0;
+              border: 2px solid #fff;
+            }
+            .online-status.active { background: #31a24c; }
+            .online-status.inactive { background: #b0b3b8; }
+            .online-dot {
+              width: 10px;
+              height: 10px;
+              border-radius: 50%;
+              position: absolute;
+              bottom: 0;
+              right: 0;
+              border: 2px solid #fff;
+              transition: background 0.3s;
+            }
+            .online-dot.offline { background: #b0b3b8; }
+          `;
+          iframeDoc.head.appendChild(styleEl);
+        }
+      } catch (e) {
+        // Iframe not accessible yet
+      }
+    }
+
+    // ========== MAIN AUTH HANDLER ==========
+    auth.onAuthStateChanged(async (user) => {
+      if (user) {
+        currentUser = user;
+        await setUserOnline(user);
+        showToast(`👋 Welcome ${user.displayName || user.email?.split('@')[0] || 'User'}`);
+
+        if (statusUpdateInterval) clearInterval(statusUpdateInterval);
+        statusUpdateInterval = setInterval(() => {
+          setUserOnline(user);
+        }, 30000);
+
+        const handleVisibilityChange = () => {
+          if (document.hidden) {
+            setUserOffline(user);
+          } else {
+            setUserOnline(user);
+          }
+        };
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
+        const handleBeforeUnload = () => setUserOffline(user);
+        window.addEventListener('beforeunload', handleBeforeUnload);
+
+        const handlePageHide = () => setUserOffline(user);
+        window.addEventListener('pagehide', handlePageHide);
+
+        const handleIframeLoad = () => {
+          setUserOnline(user);
+          if (!iframeLoaded) {
+            setTimeout(() => injectStatusStyles(), 300);
+          }
+        };
+        mainIframe.addEventListener('load', handleIframeLoad);
+
+        startSlowProgress();
+
+        const loadCheckInterval = setInterval(() => {
+          if (checkIframeLoaded()) {
+            clearInterval(loadCheckInterval);
+            setTimeout(() => injectStatusStyles(), 500);
+            startAllUsersStatusListener();
+          }
+        }, 800);
+
+        setTimeout(() => {
+          if (!iframeLoaded) {
+            iframeLoaded = true;
+            completeProgress();
+            setTimeout(() => injectStatusStyles(), 500);
+            startAllUsersStatusListener();
+            console.log('⚠️ Fallback: Forced load completion');
+          }
+        }, 15000);
+
+        window._cleanupStatus = () => {
+          document.removeEventListener('visibilitychange', handleVisibilityChange);
+          window.removeEventListener('beforeunload', handleBeforeUnload);
+          window.removeEventListener('pagehide', handlePageHide);
+          mainIframe.removeEventListener('load', handleIframeLoad);
+        };
+
+      } else {
+        currentUser = null;
+        loadingOverlay.classList.add('hidden');
+        mainIframe.classList.add('loaded');
+        showToast('🔑 Please login to SecretIntro');
+
+        if (allUsersStatusListener) {
+          allUsersStatusListener();
+          allUsersStatusListener = null;
+        }
+        if (messageListenerUnsubscribe) {
+          messageListenerUnsubscribe();
+          messageListenerUnsubscribe = null;
+        }
+
+        setTimeout(() => {
+          mainIframe.src = 'home.html';
+        }, 2000);
+      }
+    });
+
+    // ========== IFRAME EVENTS ==========
+    mainIframe.addEventListener('load', () => {
+      const user = auth.currentUser;
+      if (user) {
+        setUserOnline(user);
+        if (!iframeLoaded && !isFirstLoad) {
+          loadingOverlay.classList.remove('hidden');
+          startSlowProgress();
+          setTimeout(() => {
+            if (checkIframeLoaded()) {
+              setTimeout(() => injectStatusStyles(), 500);
+              startAllUsersStatusListener();
+            }
+          }, 2000);
+        }
+        if (user.uid) {
+          startMessageListener(user.uid);
+          if (iframeLoaded) {
+            setTimeout(() => injectStatusStyles(), 300);
+          }
+        }
+      }
+    });
+
+    // ========== URL PARAMETERS ==========
+    function getUrlParams() {
+      const params = new URLSearchParams(window.location.search);
+      return {
+        userId: params.get('user'),
+        page: params.get('page'),
+        postId: params.get('post')
+      };
+    }
+
+    function setIframeSource() {
+      const params = getUrlParams();
+      let url = 'home.html';
+      
+      if (params.page) {
+        url = `${params.page}.html`;
+        if (params.userId) url += `?user=${params.userId}`;
+        if (params.postId) url += `${params.userId ? '&' : '?'}post=${params.postId}`;
+      }
+      
+      if (params.userId && !params.page) {
+        url = `massages.html?user=${params.userId}`;
+      }
+
+      if (mainIframe.src !== url && !mainIframe.src.includes(url)) {
+        mainIframe.src = url;
+      }
+      
+      if (!iframeLoaded) {
+        loadingOverlay.classList.remove('hidden');
+        startSlowProgress();
+      }
+    }
+
+    setIframeSource();
+
+    window.addEventListener('popstate', () => setIframeSource());
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') window.history.back();
+    });
+
+    console.log('✅ SecretIntro · Real-time Status with All Users (Responsive)');
+    console.log('🟢 All users status tracked in Firebase');
+    console.log('🔔 Message notifications appear as popups');
+    console.log('📨 Only shows once per message - no duplicates');
+    console.log('🔄 Status updates instantly when users open/close');
+    console.log('📱 Click notification to open chat');
+    console.log('👀 Everyone sees real-time online/offline status');
+    console.log('📌 Proper cleanup on page unload/visibility change');
+  </script>
 </body>
 </html>
